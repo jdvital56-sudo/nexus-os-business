@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { apiSuccess, apiError, handleApiError } from "@/lib/api-helpers";
 
@@ -217,22 +217,22 @@ export async function PUT(request: Request) {
     const results: any = { modules: [] };
 
     for (const e of preview.crm.entities) {
-      const ent = db.crmEntities.create({ workspaceId, name: e.name, displayName: e.displayName, icon: e.icon, color: e.color, fields: e.fields });
+      const ent = prisma.crmEntity.create({ workspaceId, name: e.name, displayName: e.displayName, icon: e.icon, color: e.color, fields: e.fields });
       results.modules.push({ type: "crm_entity", id: ent.id, name: ent.displayName });
     }
     for (const b of preview.bots) {
-      const bot = db.aiBots.create({ workspaceId, name: b.name, type: b.type, description: b.description, channels: b.channels });
+      const bot = prisma.aiBot.create({ workspaceId, name: b.name, type: b.type, description: b.description, channels: b.channels });
       results.modules.push({ type: "bot", id: bot.id, name: bot.name });
     }
     for (const a of preview.agents) {
-      const agent = db.aiAgents.create({ workspaceId, name: a.name, role: a.role, description: a.description, tools: a.tools });
+      const agent = prisma.aiAgent.create({ workspaceId, name: a.name, role: a.role, description: a.description, tools: a.tools });
       results.modules.push({ type: "agent", id: agent.id, name: agent.name });
     }
     for (const a of preview.automations) {
-      const auto = db.automations.create({ workspaceId, name: a.name, description: a.description, trigger: a.trigger, nodes: [], connections: [] });
+      const auto = prisma.automation.create({ workspaceId, name: a.name, description: a.description, trigger: a.trigger, nodes: [], connections: [] });
       results.modules.push({ type: "automation", id: auto.id, name: auto.name });
     }
-    const website = db.websites.create({
+    const website = prisma.website.create({
       workspaceId, name: preview.name, slug: preview.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
       templateId: preview.website?.template, config: preview.website || {},
       pages: (preview.website?.pages || []).map((p: string, i: number) => ({

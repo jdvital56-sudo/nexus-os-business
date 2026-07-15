@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { prisma } from "@/lib/db";
 import { verifyPassword, signToken } from "@/lib/auth";
 import { apiSuccess, apiError, handleApiError } from "@/lib/api-helpers";
 import { loginSchema } from "@/lib/validations";
@@ -8,23 +8,24 @@ export async function POST(request: Request) {
     const body = await request.json();
     const input = loginSchema.parse(body);
 
-    const user = db.users.findByEmail(input.email);
+    const user = await prisma.user.findUnique({
+      where: { email: input.email },
+      include: { members: { include: { workspace: true } } },
+    });
     if (!user) return apiError("Invalid credentials", 401);
 
     const valid = await verifyPassword(input.password, user.passwordHash);
     if (!valid) return apiError("Invalid credentials", 401);
 
-    db.users.update(user.id, { lastLoginAt: new Date().toISOString() });
-
-    const members = db.members.findMany({ userId: user.id });
-    const workspaces = members.map((m: any) => {
-      const ws = db.workspaces.findById(m.workspaceId);
-      return ws ? { id: ws.id, name: ws.name, slug: ws.slug, role: m.role } : null;
-    }).filter(Boolean);
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
     const token = signToken({ userId: user.id, email: user.email });
 
-    return apiSuccess({ token, user: { id: user.id, email: user.email, name: user.name }, workspaces });
+    return apiSuccess({
+      token,
+      user: { id: user.id, email: user.email, name: user.name },
+      workspaces: user.members.map((m) => ({ id: m.workspace.id, name: m.workspace.name, slug: m.workspace.slug, role: m.role })),
+    });
   } catch (e) {
     return handleApiError(e);
   }

@@ -1,8 +1,8 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { db } from "./db";
+import { prisma } from "./db";
 
-const JWT_SECRET = process.env.JWT_SECRET || "nexus-os-dev-secret-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET || "nexus-os-dev-secret";
 const TOKEN_EXPIRY = "7d";
 
 export interface JwtPayload {
@@ -33,14 +33,11 @@ export function verifyToken(token: string): JwtPayload | null {
 export async function getUserFromToken(token: string) {
   const payload = verifyToken(token);
   if (!payload) return null;
-  const user = db.users.findById(payload.userId);
-  if (!user) return null;
-  const members = db.members.findMany({ userId: user.id });
-  const workspaces = members.map((m: any) => {
-    const ws = db.workspaces.findById(m.workspaceId);
-    return ws ? { ...ws, role: m.role, permissions: m.permissions } : null;
-  }).filter(Boolean);
-  return { ...user, members: workspaces };
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId },
+    include: { members: { include: { workspace: true } } },
+  });
+  return user;
 }
 
 export function getCurrentUser(request: Request) {
