@@ -54,6 +54,26 @@ tailwind.config = {
   td { padding:12px 16px; border-bottom:1px solid #f1f5f9; }
   tr:last-child td { border-bottom:none; }
   tr:hover td { background:#f8fafc; }
+
+    .flow-canvas { background: #f8fafc; background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px; min-height: 400px; position: relative; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 12px; }
+    .flow-node { position: absolute; background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 12px 16px; min-width: 160px; cursor: move; user-select: none; transition: border-color .15s, box-shadow .15s; }
+    .flow-node:hover { border-color: #818cf8; box-shadow: 0 4px 12px rgba(99,102,241,.15); }
+    .flow-node.selected { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(99,102,241,.2); }
+    .flow-node-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .flow-node-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .flow-node-title { font-size: 13px; font-weight: 600; }
+    .flow-node-desc { font-size: 11px; color: #64748b; }
+    .flow-port { width: 12px; height: 12px; border-radius: 50%; background: #4f46e5; border: 2px solid white; position: absolute; cursor: crosshair; }
+    .flow-port-in { top: -6px; left: 50%; transform: translateX(-50%); }
+    .flow-port-out { bottom: -6px; left: 50%; transform: translateX(-50%); }
+    .flow-connection { position: absolute; pointer-events: none; }
+    .node-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .node-palette-item { padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; cursor: grab; font-size: 12px; display: flex; align-items: center; gap: 6px; transition: all .15s; }
+    .node-palette-item:hover { border-color: #818cf8; background: #eef2ff; }
+    .ai-chat { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .ai-msg { padding: 10px 14px; border-radius: 12px; font-size: 13px; max-width: 85%; line-height: 1.5; }
+    .ai-msg-user { background: #4f46e5; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .ai-msg-bot { background: #f1f5f9; color: #334155; align-self: flex-start; border-bottom-left-radius: 4px; }
 </style>
 </head>
 <body>
@@ -608,10 +628,39 @@ function renderAutomations() {
   const autos = db.automations.filter(a=>a.wsId===wsId);
   return `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
-      <div><h1 style="font-size:24px;font-weight:800">Automations</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Visual workflow automation engine</p></div>
-      <button class="btn btn-primary" onclick="openModal('createAutomation')">+ Create Automation</button>
+      <div><h1 style="font-size:24px;font-weight:800">⚡ Automations</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Visual workflow automation engine</p></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn ${autoTab==='list'?'btn-primary':'btn-secondary'} btn-sm" onclick="autoTab='list';render()">📋 List</button>
+        <button class="btn ${autoTab==='editor'?'btn-primary':'btn-secondary'} btn-sm" onclick="autoTab='editor';flowNodes=[];flowConnections=[];render()">🎨 Visual Editor</button>
+        <button class="btn ${autoTab==='ai'?'btn-primary':'btn-secondary'} btn-sm" onclick="autoTab='ai';render()">🤖 AI Assistant</button>
+      </div>
     </div>
-    ${autos.length===0?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center">
+    ${autoTab==='editor'?`<div style="display:grid;grid-template-columns:220px 1fr 260px;gap:16px">
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;max-height:500px;overflow-y:auto">
+        <h4 style="font-weight:700;font-size:13px;margin-bottom:12px">Node Palette</h4>
+        ${renderNodePalette()}
+      </div>
+      <div>
+        ${renderFlowCanvas()}
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn btn-primary btn-sm" onclick="saveFlowAsAutomation()">💾 Save Automation</button>
+          <button class="btn btn-secondary btn-sm" onclick="flowNodes=[];flowConnections=[];render()">🗑 Clear</button>
+        </div>
+      </div>
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+        <h4 style="font-weight:700;font-size:13px;margin-bottom:12px">Properties</h4>
+        ${selectedNodeId?(() => { const n = flowNodes.find(x=>x.id===selectedNodeId); return n ? `
+          <div style="margin-bottom:12px"><p style="font-size:11px;color:#94a3b8">Type</p><p style="font-weight:600">${n.icon} ${n.label}</p></div>
+          <div style="margin-bottom:12px"><p style="font-size:11px;color:#94a3b8">Description</p><p style="font-size:13px">${n.desc}</p></div>
+          <div style="margin-bottom:12px"><p style="font-size:11px;color:#94a3b8">Position</p><p style="font-size:13px">x: ${Math.round(n.x)}, y: ${Math.round(n.y)}</p></div>
+          <button class="btn btn-danger btn-sm" style="width:100%" onclick="deleteFlowNode('${n.id}')">🗑 Delete Node</button>
+        ` : '<p style="color:#94a3b8;font-size:13px">Select a node</p>'; })() : '<p style="color:#94a3b8;font-size:13px">Select a node to edit properties</p>'}
+      </div>
+    </div>`
+    : autoTab==='ai'?
+      renderAIChat()
+    :
+    (autos.length===0?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center">
       <p style="font-size:48px;margin-bottom:16px">⚡</p><h3 style="font-weight:700;margin-bottom:8px">No Automations Yet</h3>
       <p style="color:#64748b;font-size:14px;margin-bottom:24px">Create your first automation workflow.</p>
       <button class="btn btn-primary" onclick="openModal('createAutomation')">+ Create Automation</button>
@@ -624,7 +673,22 @@ function renderAutomations() {
         <button style="background:none;border:none;cursor:pointer;font-size:18px;${a.active?'color:#d97706':'color:#059669'}" onclick="toggleAutomation('${a.id}')">${a.active?'⏸':'▶'}</button>
         <button style="background:none;border:none;cursor:pointer;color:#94a3b8" onclick="db.automations=db.automations.filter(x=>x.id!=='${a.id}');saveDB(db);toast('Deleted');render()">🗑</button>
       </div>`).join('')}
-    </div>`}`;
+    </div>`)}`;
+}
+
+function saveFlowAsAutomation() {
+  if (flowNodes.length === 0) { toast('Add nodes first','error'); return; }
+  const name = prompt('Automation name:');
+  if (!name) return;
+  db.automations.push({id:genId(), wsId, name, description:'Visual workflow with '+flowNodes.length+' nodes',
+    trigger:flowNodes.find(n=>n.category==='trigger')?.type||'manual',
+    nodes:flowNodes.map(n=>({type:n.type,label:n.label,x:n.x,y:n.y})),
+    connections:flowConnections, active:false, executions:0, createdAt:now()});
+  saveDB(db);
+  flowNodes = []; flowConnections = [];
+  autoTab = 'list';
+  toast('Automation "'+name+'" created!');
+  render();
 }
 
 function toggleAutomation(id) {
@@ -852,7 +916,27 @@ function renderGenerator() {
     <div style="font-size:64px;margin-bottom:24px;animation:spin 1s linear infinite">⏳</div>
     <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Deploying Your Business</h2>
     <p style="color:#64748b">Setting up CRM, website, bots, agents, and automations...</p>
-    <style>@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>
+    <style>@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+    .flow-canvas { background: #f8fafc; background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px; min-height: 400px; position: relative; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 12px; }
+    .flow-node { position: absolute; background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 12px 16px; min-width: 160px; cursor: move; user-select: none; transition: border-color .15s, box-shadow .15s; }
+    .flow-node:hover { border-color: #818cf8; box-shadow: 0 4px 12px rgba(99,102,241,.15); }
+    .flow-node.selected { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(99,102,241,.2); }
+    .flow-node-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .flow-node-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .flow-node-title { font-size: 13px; font-weight: 600; }
+    .flow-node-desc { font-size: 11px; color: #64748b; }
+    .flow-port { width: 12px; height: 12px; border-radius: 50%; background: #4f46e5; border: 2px solid white; position: absolute; cursor: crosshair; }
+    .flow-port-in { top: -6px; left: 50%; transform: translateX(-50%); }
+    .flow-port-out { bottom: -6px; left: 50%; transform: translateX(-50%); }
+    .flow-connection { position: absolute; pointer-events: none; }
+    .node-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .node-palette-item { padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; cursor: grab; font-size: 12px; display: flex; align-items: center; gap: 6px; transition: all .15s; }
+    .node-palette-item:hover { border-color: #818cf8; background: #eef2ff; }
+    .ai-chat { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .ai-msg { padding: 10px 14px; border-radius: 12px; font-size: 13px; max-width: 85%; line-height: 1.5; }
+    .ai-msg-user { background: #4f46e5; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .ai-msg-bot { background: #f1f5f9; color: #334155; align-self: flex-start; border-bottom-left-radius: 4px; }
+</style>
   </div>`;
 
   if (genStep==='done') return `<div style="max-width:500px;margin:48px auto;text-align:center">
@@ -1267,6 +1351,177 @@ function renderSettings() {
       </div>
     </div>`;
 }
+
+// ─── Flow Editor State ─────────────────────────────────────────────
+let flowNodes = [];
+let flowConnections = [];
+let selectedNodeId = null;
+let draggingNode = null;
+let dragOffset = {x:0,y:0};
+
+const NODE_TYPES = [
+  {type:'trigger_event',icon:'⚡',color:'#f59e0b',label:'Event Trigger',desc:'When something happens',category:'trigger'},
+  {type:'trigger_schedule',icon:'⏰',color:'#3b82f6',label:'Schedule',desc:'Run at specific time',category:'trigger'},
+  {type:'trigger_webhook',icon:'🔗',color:'#8b5cf6',label:'Webhook',desc:'External HTTP call',category:'trigger'},
+  {type:'trigger_lead',icon:'🎯',color:'#ec4899',label:'Lead Action',desc:'When lead does something',category:'trigger'},
+  {type:'action_email',icon:'📧',color:'#10b981',label:'Send Email',desc:'Send email message',category:'action'},
+  {type:'action_sms',icon:'📲',color:'#059669',label:'Send SMS',desc:'Send SMS message',category:'action'},
+  {type:'action_whatsapp',icon:'💬',color:'#22c55e',label:'WhatsApp',desc:'Send WhatsApp message',category:'action'},
+  {type:'action_telegram',icon:'📱',color:'#0ea5e9',label:'Telegram',desc:'Send Telegram message',category:'action'},
+  {type:'action_crm_create',icon:'🗃️',color:'#6366f1',label:'Create Record',desc:'Add CRM record',category:'action'},
+  {type:'action_crm_update',icon:'✏️',color:'#4f46e5',label:'Update Record',desc:'Update CRM record',category:'action'},
+  {type:'action_notification',icon:'🔔',color:'#f97316',label:'Notification',desc:'Send in-app notification',category:'action'},
+  {type:'action_http',icon:'🌐',color:'#64748b',label:'HTTP Request',desc:'Call external API',category:'action'},
+  {type:'logic_if',icon':'❓',color:'#eab308',label:'IF/ELSE',desc:'Conditional branch',category:'logic'},
+  {type:'logic_delay',icon':'⏳',color:'#a855f7',label:'Delay',desc:'Wait before next step',category:'logic'},
+  {type:'logic_loop',icon':'🔄',color:'#14b8a6',label:'Loop',desc:'Repeat for each item',category:'logic'},
+  {type:'ai_classify',icon:'🧠',color:'#ec4899',label:'AI Classify',desc:'Classify with AI',category:'ai'},
+  {type:'ai_generate',icon:'✨',color:'#8b5cf6',label:'AI Generate',desc:'Generate content with AI',category:'ai'},
+  {type:'ai_score',icon:'📊',color:'#f43f5e',label:'AI Score',desc:'Score/qualify with AI',category:'ai'},
+  {type:'ai_extract',icon:'🔍',color:'#06b6d4',label:'AI Extract',desc:'Extract data with AI',category:'ai'},
+];
+
+function addFlowNode(type) {
+  const nt = NODE_TYPES.find(n=>n.type===type);
+  if (!nt) return;
+  const node = {id:genId(), type:nt.type, icon:nt.icon, color:nt.color, label:nt.label, desc:nt.desc,
+    x:100+Math.random()*300, y:80+flowNodes.length*80, config:{}};
+  flowNodes.push(node);
+  selectedNodeId = node.id;
+  render();
+}
+
+function selectFlowNode(id) { selectedNodeId = id; render(); }
+
+function deleteFlowNode(id) {
+  flowNodes = flowNodes.filter(n=>n.id!==id);
+  flowConnections = flowConnections.filter(c=>c.from!==id&&c.to!==id);
+  if (selectedNodeId===id) selectedNodeId = null;
+  render();
+}
+
+function startDragNode(e, id) {
+  e.preventDefault();
+  const node = flowNodes.find(n=>n.id===id);
+  if (!node) return;
+  draggingNode = id;
+  const rect = e.target.closest('.flow-node').getBoundingClientRect();
+  dragOffset = {x:e.clientX-rect.left, y:e.clientY-rect.top};
+  selectedNodeId = id;
+  render();
+}
+
+function onCanvasMouseMove(e) {
+  if (!draggingNode) return;
+  const canvas = e.target.closest('.flow-canvas');
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const node = flowNodes.find(n=>n.id===draggingNode);
+  if (node) {
+    node.x = Math.max(0, e.clientX - rect.left - dragOffset.x);
+    node.y = Math.max(0, e.clientY - rect.top - dragOffset.y);
+    render();
+  }
+}
+
+function onCanvasMouseUp() { draggingNode = null; }
+
+function connectNodes(fromId, toId) {
+  if (fromId === toId) return;
+  if (flowConnections.find(c=>c.from===fromId&&c.to===toId)) return;
+  flowConnections.push({id:genId(), from:fromId, to:toId});
+  render();
+}
+
+function renderFlowCanvas() {
+  return `<div class="flow-canvas" onmousemove="onCanvasMouseMove(event)" onmouseup="onCanvasMouseUp()" style="min-height:450px">
+    ${flowConnections.map(c=>{
+      const from = flowNodes.find(n=>n.id===c.from);
+      const to = flowNodes.find(n=>n.id===c.to);
+      if (!from||!to) return '';
+      const x1=from.x+80, y1=from.y+50, x2=to.x+80, y2=to.y;
+      const mx=(x1+x2)/2, my=(y1+y2)/2;
+      return `<svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"><path d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}" stroke="#818cf8" stroke-width="2" fill="none"/><circle cx="${x2}" cy="${y2}" r="4" fill="#818cf8"/></svg>`;
+    }).join('')}
+    ${flowNodes.map(n=>`<div class="flow-node ${selectedNodeId===n.id?'selected':''}" style="left:${n.x}px;top:${n.y}px" onclick="selectFlowNode('${n.id}')" onmousedown="startDragNode(event,'${n.id}')">
+      <div class="flow-node-header">
+        <div class="flow-node-icon" style="background:${n.color}20;color:${n.color}">${n.icon}</div>
+        <div><div class="flow-node-title">${n.label}</div><div class="flow-node-desc">${n.desc}</div></div>
+      </div>
+      <div class="flow-port flow-port-in" onclick="event.stopPropagation()"></div>
+      <div class="flow-port flow-port-out" onclick="event.stopPropagation();connectNodes('${n.id}',prompt('Connect to node ID:'))"></div>
+    </div>`).join('')}
+    ${flowNodes.length===0?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:14px">
+      <div style="text-align:center"><p style="font-size:36px;margin-bottom:8px">⚡</p><p>Add nodes from the palette to build your workflow</p></div>
+    </div>`:''}
+  </div>`;
+}
+
+function renderNodePalette() {
+  const categories = {trigger:'Triggers',action:'Actions',logic:'Logic',ai:'AI'};
+  return Object.entries(categories).map(([cat,label])=>`
+    <div style="margin-bottom:12px">
+      <p style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${label}</p>
+      <div class="node-palette">
+        ${NODE_TYPES.filter(n=>n.category===cat).map(n=>`<div class="node-palette-item" onclick="addFlowNode('${n.type}')" draggable="true">
+          <span style="color:${n.color}">${n.icon}</span><span>${n.label}</span>
+        </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+// ─── AI Chat ───────────────────────────────────────────────────────
+let aiMessages = [{role:'bot',content:'Hello! I\'m your AI assistant. I can help you build automations, qualify leads, generate content, and manage your business. What would you like to do?'}];
+
+const AI_RESPONSES = {
+  'lead':'I can help you find and qualify leads! Here\'s what I can do:\n\n🎯 **Find leads** by industry and location\n📊 **Score leads** based on company data\n📧 **Auto-outreach** with personalized messages\n📈 **Track conversions** across channels\n\nGo to the Lead Gen page to start, or ask me to help qualify specific leads.',
+  'automation':'I can help you build automations! Try these:\n\n⚡ **Lead follow-up** - Auto-email when new lead comes in\n📅 **Appointment reminder** - SMS/WhatsApp before meetings\n💰 **Deal won** - Notify team + trigger onboarding\n🔄 **Review request** - Ask for reviews after service\n\nSwitch to the Automations tab to build visually!',
+  'email':'I can help with email marketing!\n\n📧 **Welcome sequence** - 3-5 emails for new leads\n🎯 **Nurture campaign** - Educational content series\n💰 **Sales outreach** - Personalized cold emails\n🔄 **Win-back** - Re-engage inactive customers\n\nWhat type of email do you need?',
+  'report':'Here\'s a quick business summary:\n\n📊 **CRM Records:** '+(() => { try { return db.records.filter(r=>r.wsId===wsId).length } catch { return 0 } })()+'\n🎯 **Active Leads:** '+(() => { try { return leadsData.length } catch { return 0 } })()+'\n⚡ **Automations:** '+(() => { try { return db.automations.filter(a=>a.wsId===wsId).length } catch { return 0 } })()+'\n🤖 **AI Bots:** '+(() => { try { return db.bots.filter(b=>b.wsId===wsId).length } catch { return 0 } })()+'\n\nWant me to generate a detailed report?',
+  'help':'I can help you with:\n\n🎯 **Lead Generation** - Find and qualify leads\n⚡ **Automations** - Build visual workflows\n📧 **Email Marketing** - Create campaigns\n📊 **Reports** - Business analytics\n🗃️ **CRM** - Manage contacts and deals\n🌐 **Websites** - Build and publish sites\n🤖 **AI Bots** - Configure chatbots\n👤 **Agents** - Deploy AI agents\n\nJust ask me anything!',
+  'default':'I understand you want help with that. Let me think about the best approach...\n\nBased on your business, I recommend:\n1. Start with **Lead Generation** to find customers\n2. Set up **Automations** to nurture them\n3. Use **AI Bots** to handle inquiries\n4. Track everything in **CRM**\n\nWhich would you like to start with?'
+};
+
+function getAIResponse(msg) {
+  const lower = msg.toLowerCase();
+  if (lower.includes('lead') || lower.includes('find') || lower.includes('customer')) return AI_RESPONSES.lead;
+  if (lower.includes('autom') || lower.includes('workflow') || lower.includes('trigger')) return AI_RESPONSES.automation;
+  if (lower.includes('email') || lower.includes('campaign') || lower.includes('newsletter')) return AI_RESPONSES.email;
+  if (lower.includes('report') || lower.includes('analytics') || lower.includes('summary') || lower.includes('stat')) return AI_RESPONSES.report;
+  if (lower.includes('help') || lower.includes('what') || lower.includes('how')) return AI_RESPONSES.help;
+  return AI_RESPONSES.default;
+}
+
+function sendAIMessage() {
+  const input = document.getElementById('aiInput');
+  if (!input || !input.value.trim()) return;
+  const msg = input.value.trim();
+  aiMessages.push({role:'user',content:msg});
+  input.value = '';
+  render();
+  setTimeout(() => {
+    aiMessages.push({role:'bot',content:getAIResponse(msg)});
+    render();
+    const chat = document.getElementById('aiChat');
+    if (chat) chat.scrollTop = chat.scrollHeight;
+  }, 800);
+}
+
+function renderAIChat() {
+  return `<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;height:100%;display:flex;flex-direction:column">
+    <h3 style="font-weight:700;margin-bottom:12px;font-size:14px">🤖 AI Assistant</h3>
+    <div id="aiChat" class="ai-chat" style="flex:1;overflow-y:auto;margin-bottom:12px">
+      ${aiMessages.map(m=>`<div class="ai-msg ${m.role==='user'?'ai-msg-user':'ai-msg-bot'}">${m.content.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px">
+      <input class="input" id="aiInput" placeholder="Ask me anything..." style="font-size:13px" onkeydown="if(event.key==='Enter')sendAIMessage()">
+      <button class="btn btn-primary btn-sm" onclick="sendAIMessage()">Send</button>
+    </div>
+  </div>`;
+}
+
+// ─── Enhanced Automations Page ─────────────────────────────────────
+let autoTab = 'list';
 
 // ─── Init ──────────────────────────────────────────────────────────
 render();
