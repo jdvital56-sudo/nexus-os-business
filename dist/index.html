@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus OS Business — Universal Business Platform</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        brand: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81' },
+        surface: { 0:'#ffffff',1:'#f8fafc',2:'#f1f5f9',3:'#e2e8f0' },
+      }
+    }
+  }
+}
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  * { font-family: 'Inter', system-ui, sans-serif; }
+  body { background: #f8fafc; }
+  .fade-in { animation: fadeIn .3s ease-out; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes slideIn { from { opacity:0; transform:translateX(-12px); } to { opacity:1; transform:translateX(0); } }
+  .slide-in { animation: slideIn .3s ease-out; }
+  ::-webkit-scrollbar { width:6px; } ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:3px; }
+  .modal-bg { background: rgba(0,0,0,.5); backdrop-filter: blur(4px); }
+  input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(99,102,241,.2); border-color: #6366f1; }
+  .toast { animation: slideIn .3s ease-out; }
+  .page { display:none; } .page.active { display:block; }
+  .nav-item.active { background: #4f46e5; color: white; }
+  .nav-item:not(.active):hover { background: rgba(255,255,255,.05); }
+  .card-hover:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); border-color: #c7d2fe; }
+  .badge { display:inline-flex; align-items:center; gap:4px; padding:2px 10px; border-radius:9999px; font-size:11px; font-weight:500; }
+  .badge-green { background:#ecfdf5; color:#059669; }
+  .badge-gray { background:#f1f5f9; color:#64748b; }
+  .badge-blue { background:#eef2ff; color:#4f46e5; }
+  .badge-amber { background:#fffbeb; color:#d97706; }
+  .badge-red { background:#fef2f2; color:#dc2626; }
+  .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 20px; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; transition:all .15s; border:none; }
+  .btn-primary { background:#4f46e5; color:white; } .btn-primary:hover { background:#4338ca; }
+  .btn-secondary { background:white; color:#1e293b; border:1px solid #e2e8f0; } .btn-secondary:hover { background:#f8fafc; }
+  .btn-ghost { background:transparent; color:#64748b; } .btn-ghost:hover { background:#f1f5f9; color:#1e293b; }
+  .btn-danger { background:#dc2626; color:white; } .btn-danger:hover { background:#b91c1c; }
+  .btn-sm { padding:6px 12px; font-size:12px; }
+  .btn-lg { padding:14px 28px; font-size:16px; }
+  .input { width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px; transition:all .15s; background:white; }
+  .textarea { min-height:80px; resize:vertical; }
+  .table-wrap { border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; background:white; }
+  table { width:100%; font-size:14px; }
+  th { background:#f8fafc; padding:12px 16px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:#64748b; border-bottom:1px solid #e2e8f0; }
+  td { padding:12px 16px; border-bottom:1px solid #f1f5f9; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#f8fafc; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// NEXUS OS BUSINESS — Complete Standalone Application
+// ═══════════════════════════════════════════════════════════════════
+
+// ─── Database (localStorage) ───────────────────────────────────────
+const DB_KEY = 'nexus_os_db';
+function loadDB() {
+  const raw = localStorage.getItem(DB_KEY);
+  if (raw) return JSON.parse(raw);
+  return { users:[], orgs:[], workspaces:[], members:[], entities:[], records:[], websites:[], automations:[], bots:[], agents:[], marketplace:[], packages:[] };
+}
+function saveDB(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+function genId() { return Math.random().toString(36).slice(2,11) + Date.now().toString(36); }
+function now() { return new Date().toISOString(); }
+
+// ─── Auth ──────────────────────────────────────────────────────────
+const AUTH_KEY = 'nexus_auth';
+function getAuth() { try { return JSON.parse(localStorage.getItem(AUTH_KEY)); } catch { return null; } }
+function setAuth(a) { localStorage.setItem(AUTH_KEY, JSON.stringify(a)); }
+function clearAuth() { localStorage.removeItem(AUTH_KEY); }
+function hashPw(pw) { return btoa(pw); } // simplified for demo
+
+// ─── State ─────────────────────────────────────────────────────────
+let db = loadDB();
+let auth = getAuth();
+let currentPage = 'dashboard';
+let wsId = null;
+let toasts = [];
+
+function toast(msg, type='success') {
+  const id = genId();
+  toasts.push({ id, msg, type });
+  render();
+  setTimeout(() => { toasts = toasts.filter(t => t.id !== id); render(); }, 3500);
+}
+
+function navigate(page) {
+  currentPage = page;
+  render();
+}
+
+// ─── Seed Demo Data ────────────────────────────────────────────────
+function seedDemo() {
+  if (db.users.length > 0) return;
+  const uid = genId(), orgId = genId(), wid = genId();
+  db.users.push({ id:uid, email:'demo@nexusos.com', name:'Demo User', passwordHash:hashPw('demo1234'), createdAt:now() });
+  db.orgs.push({ id:orgId, name:'Demo Organization', slug:'demo-org', createdAt:now() });
+  db.workspaces.push({ id:wid, orgId, name:'My Workspace', slug:'default', createdAt:now() });
+  db.members.push({ id:genId(), wsId:wid, userId:uid, role:'owner' });
+
+  const cid = genId(), did = genId(), tid = genId();
+  db.entities.push(
+    { id:cid, wsId:wid, name:'contacts', displayName:'Contacts', icon:'👤', color:'#6366f1', fields:[
+      {name:'first_name',type:'text',label:'First Name',required:true},{name:'last_name',type:'text',label:'Last Name',required:true},
+      {name:'email',type:'email',label:'Email'},{name:'phone',type:'phone',label:'Phone'},
+      {name:'company',type:'text',label:'Company'},{name:'status',type:'select',label:'Status',required:true,options:[{label:'Lead',value:'lead'},{label:'Customer',value:'customer'},{label:'Partner',value:'partner'}]}
+    ], createdAt:now() },
+    { id:did, wsId:wid, name:'deals', displayName:'Deals', icon:'📈', color:'#10b981', fields:[
+      {name:'title',type:'text',label:'Deal Title',required:true},{name:'value',type:'currency',label:'Value',required:true},
+      {name:'contact',type:'text',label:'Contact'},{name:'stage',type:'select',label:'Stage',required:true,options:[{label:'New',value:'new'},{label:'Qualified',value:'qualified'},{label:'Proposal',value:'proposal'},{label:'Won',value:'won'},{label:'Lost',value:'lost'}]}
+    ], createdAt:now() },
+    { id:tid, wsId:wid, name:'tasks', displayName:'Tasks', icon:'✅', color:'#f59e0b', fields:[
+      {name:'title',type:'text',label:'Title',required:true},{name:'description',type:'textarea',label:'Description'},
+      {name:'due_date',type:'date',label:'Due Date'},{name:'priority',type:'select',label:'Priority',required:true,options:[{label:'Low',value:'low'},{label:'Medium',value:'medium'},{label:'High',value:'high'}]},
+      {name:'status',type:'select',label:'Status',required:true,options:[{label:'To Do',value:'todo'},{label:'In Progress',value:'in_progress'},{label:'Done',value:'done'}]}
+    ], createdAt:now() }
+  );
+
+  [
+    {first_name:'Alice',last_name:'Johnson',email:'alice@example.com',phone:'+1 555-0101',company:'TechCorp',status:'customer'},
+    {first_name:'Bob',last_name:'Smith',email:'bob@example.com',phone:'+1 555-0102',company:'StartupXYZ',status:'lead'},
+    {first_name:'Carol',last_name:'Williams',email:'carol@example.com',phone:'+1 555-0103',company:'BigCo',status:'partner'},
+    {first_name:'David',last_name:'Brown',email:'david@example.com',phone:'+1 555-0104',company:'NewVenture',status:'lead'},
+    {first_name:'Eva',last_name:'Martinez',email:'eva@example.com',phone:'+1 555-0105',company:'GlobalInc',status:'customer'},
+  ].forEach(d => db.records.push({ id:genId(), wsId:wid, entityId:cid, data:d, createdAt:now() }));
+
+  [
+    {title:'Enterprise License',value:50000,contact:'Alice Johnson',stage:'proposal'},
+    {title:'Startup Package',value:12000,contact:'Bob Smith',stage:'qualified'},
+    {title:'Consulting Project',value:25000,contact:'Carol Williams',stage:'won'},
+    {title:'Annual Subscription',value:8000,contact:'David Brown',stage:'new'},
+  ].forEach(d => db.records.push({ id:genId(), wsId:wid, entityId:did, data:d, createdAt:now() }));
+
+  [
+    {title:'Prepare proposal for TechCorp',priority:'high',status:'in_progress',due_date:'2026-07-20'},
+    {title:'Follow up with Bob',priority:'medium',status:'todo',due_date:'2026-07-18'},
+    {title:'Send contract to BigCo',priority:'high',status:'todo',due_date:'2026-07-22'},
+  ].forEach(d => db.records.push({ id:genId(), wsId:wid, entityId:tid, data:d, createdAt:now() }));
+
+  db.automations.push(
+    { id:genId(), wsId:wid, name:'Lead Follow-up', description:'Send follow-up email to new leads', trigger:{type:'event',event:'contact.created'}, active:true, executions:12, createdAt:now() },
+    { id:genId(), wsId:wid, name:'Deal Won Notification', description:'Notify team when deal is won', trigger:{type:'event',event:'deal.won'}, active:true, executions:5, createdAt:now() }
+  );
+  db.bots.push({ id:genId(), wsId:wid, name:'Support Bot', type:'support', description:'Handles customer support inquiries', channels:['web','whatsapp'], active:true, createdAt:now() });
+  db.agents.push({ id:genId(), wsId:wid, name:'Sales Assistant', role:'sales', description:'Lead qualification and deal management', tools:['crm','email','calendar'], active:true, createdAt:now() });
+  db.websites.push({ id:genId(), wsId:wid, name:'My Business Website', slug:'my-business', published:true, pages:['Home','About','Services','Contact'], createdAt:now() });
+
+  db.marketplace.push(
+    { id:genId(), type:'package', name:'Dental Clinic Pro', desc:'Complete dental clinic with CRM, website, appointment bot', category:'healthcare', rating:4.9, installs:1240, price:'Free', status:'published' },
+    { id:genId(), type:'crm_template', name:'Real Estate CRM', desc:'CRM for agencies with properties, leads, deals', category:'realestate', rating:4.7, installs:560, price:'$49', status:'published' },
+    { id:genId(), type:'bot', name:'Sales Closer Bot', desc:'AI sales bot that qualifies and closes 24/7', category:'sales', rating:4.8, installs:340, price:'$39/mo', status:'published' },
+    { id:genId(), type:'automation', name:'Lead Nurture Flow', desc:'7-step email nurture with AI personalization', category:'marketing', rating:4.8, installs:890, price:'Free', status:'published' },
+    { id:genId(), type:'agent', name:'SEO Agent Pro', desc:'Autonomous SEO optimization and rank tracking', category:'marketing', rating:4.6, installs:340, price:'$49/mo', status:'published' },
+    { id:genId(), type:'website_template', name:'Restaurant Suite', desc:'Menu, reservations, delivery, reviews', category:'restaurant', rating:4.8, installs:980, price:'$29/mo', status:'published' }
+  );
+
+  saveDB(db);
+}
+seedDemo();
+db = loadDB();
+
+// ─── Helper Functions ──────────────────────────────────────────────
+function getWs() { return db.workspaces.find(w => w.id === wsId); }
+function getWsEntities() { return db.entities.filter(e => e.wsId === wsId); }
+function getEntityRecords(eid) { return db.records.filter(r => r.wsId === wsId && r.entityId === eid); }
+function fmtDate(d) { return new Date(d).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}); }
+function fmtCurrency(v) { return '$' + Number(v).toLocaleString(); }
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+// ─── Render ────────────────────────────────────────────────────────
+function render() {
+  const app = document.getElementById('app');
+  if (!auth) { app.innerHTML = renderAuth(); bindAuth(); return; }
+  if (!wsId && auth.workspaces.length) wsId = auth.workspaces[0].id;
+  app.innerHTML = renderShell();
+  bindShell();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AUTH PAGE
+// ═══════════════════════════════════════════════════════════════════
+let authMode = 'login';
+function renderAuth() {
+  return `
+  <div style="display:flex;min-height:100vh">
+    <div style="width:50%;background:#0f172a;color:white;display:flex;flex-direction:column;justify-content:between;padding:48px;position:relative;overflow:hidden" class="hidden lg:flex">
+      <div style="position:absolute;inset:0;background:radial-gradient(ellipse at top right,rgba(99,102,241,.15),transparent 60%)"></div>
+      <div style="position:relative;z-index:1">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:64px">
+          <div style="width:40px;height:40px;border-radius:12px;background:#6366f1;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px">N</div>
+          <span style="font-size:20px;font-weight:700">Nexus OS</span>
+        </div>
+        <h2 style="font-size:36px;font-weight:800;line-height:1.2;margin-bottom:24px">Build any business<br><span style="color:#818cf8">in minutes.</span></h2>
+        <p style="color:rgba(255,255,255,.6);font-size:16px;max-width:420px">Universal business operating system with AI-powered CRM, websites, automations, and intelligent agents — all in one platform.</p>
+      </div>
+      <div style="position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        ${['AI First','Modular','API First','Low-Code','Multi-Tenant','Cloud Native'].map(f=>`<div style="background:rgba(255,255,255,.05);border-radius:8px;padding:8px 12px;font-size:12px;color:rgba(255,255,255,.4);border:1px solid rgba(255,255,255,.05)">${f}</div>`).join('')}
+      </div>
+    </div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:32px;background:#f8fafc">
+      <div style="width:100%;max-width:420px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:40px" class="lg:hidden">
+          <div style="width:40px;height:40px;border-radius:12px;background:#4f46e5;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;color:white">N</div>
+          <span style="font-size:20px;font-weight:700">Nexus OS</span>
+        </div>
+        <h3 style="font-size:24px;font-weight:700;margin-bottom:4px">${authMode==='login'?'Welcome back':'Create your account'}</h3>
+        <p style="color:#64748b;font-size:14px;margin-bottom:32px">${authMode==='login'?'Sign in to your workspace':'Start building your business in minutes'}</p>
+        <form id="authForm" style="display:flex;flex-direction:column;gap:16px">
+          ${authMode==='register'?`<div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Full Name</label><input class="input" id="authName" placeholder="John Doe" required></div>
+          <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Organization</label><input class="input" id="authOrg" placeholder="My Company"></div>`:''}
+          <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Email</label><input class="input" id="authEmail" type="email" placeholder="you@company.com" required></div>
+          <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Password</label><input class="input" id="authPw" type="password" placeholder="••••••••" required minlength="6"></div>
+          <button type="submit" class="btn btn-primary btn-lg" style="width:100%;justify-content:center">${authMode==='login'?'Sign In':'Create Account'}</button>
+        </form>
+        <p style="text-align:center;font-size:14px;color:#64748b;margin-top:24px">
+          ${authMode==='login'?"Don't have an account? ":"Already have an account? "}
+          <button onclick="authMode='${authMode==='login'?'register':'login'}';render()" style="color:#4f46e5;font-weight:600;background:none;border:none;cursor:pointer">${authMode==='login'?'Sign up':'Sign in'}</button>
+        </p>
+      </div>
+    </div>
+  </div>`;
+}
+function bindAuth() {
+  const form = document.getElementById('authForm');
+  if (!form) return;
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const email = document.getElementById('authEmail').value;
+    const pw = document.getElementById('authPw').value;
+    if (authMode === 'login') {
+      const user = db.users.find(u => u.email === email && u.passwordHash === hashPw(pw));
+      if (!user) { toast('Invalid credentials','error'); return; }
+      const memberships = db.members.filter(m => m.userId === user.id);
+      const workspaces = memberships.map(m => { const ws = db.workspaces.find(w=>w.id===m.wsId); return ws ? {id:ws.id,name:ws.name,role:m.role} : null; }).filter(Boolean);
+      auth = { user:{id:user.id,email:user.email,name:user.name}, workspaces };
+      setAuth(auth); wsId = workspaces[0]?.id; toast('Welcome back!'); render();
+    } else {
+      const name = document.getElementById('authName').value;
+      const org = document.getElementById('authOrg').value || name+"'s Organization";
+      if (db.users.find(u=>u.email===email)) { toast('Email already registered','error'); return; }
+      const uid=genId(), oid=genId(), wid=genId();
+      db.users.push({id:uid,email,name,passwordHash:hashPw(pw),createdAt:now()});
+      db.orgs.push({id:oid,name:org,slug:org.toLowerCase().replace(/[^a-z0-9]+/g,'-'),createdAt:now()});
+      db.workspaces.push({id:wid,orgId:oid,name:'Default Workspace',slug:'default',createdAt:now()});
+      db.members.push({id:genId(),wsId:wid,userId:uid,role:'owner'});
+      saveDB(db);
+      auth = { user:{id:uid,email,name}, workspaces:[{id:wid,name:'Default Workspace',role:'owner'}] };
+      setAuth(auth); wsId = wid; toast('Account created! Welcome to Nexus OS.'); render();
+    }
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MAIN SHELL
+// ═══════════════════════════════════════════════════════════════════
+let sidebarOpen = true;
+function renderShell() {
+  return `
+  <div style="display:flex;min-height:100vh">
+    ${renderSidebar()}
+    <main style="flex:1;margin-left:${sidebarOpen?'256px':'68px'};transition:margin-left .3s;min-height:100vh;background:#f8fafc">
+      <div style="padding:24px;max-width:1400px;margin:0 auto" class="fade-in">
+        ${renderPage()}
+      </div>
+    </main>
+  </div>
+  ${renderModal()}
+  ${renderToasts()}`;
+}
+
+function renderSidebar() {
+  const nav = [
+    {id:'dashboard',label:'Dashboard',icon:'📊'},{id:'crm',label:'CRM',icon:'🗃️'},{id:'websites',label:'Websites',icon:'🌐'},
+    {id:'automations',label:'Automations',icon:'⚡'},{id:'bots',label:'AI Bots',icon:'🤖'},{id:'agents',label:'AI Agents',icon:'👤'},
+    {id:'generator',label:'Generator',icon:'✨'},{id:'leads',label:'Lead Gen',icon:'🎯'},{id:'marketplace',label:'Marketplace',icon:'🛒'},{id:'packages',label:'Packages',icon:'📦'},{id:'settings',label:'Settings',icon:'⚙️'}
+  ];
+  return `
+  <aside style="position:fixed;left:0;top:0;bottom:0;width:${sidebarOpen?256:68}px;background:#0f172a;color:white;display:flex;flex-direction:column;z-index:40;transition:width .3s">
+    <div style="display:flex;align-items:center;gap:12px;padding:0 16px;height:64px;border-bottom:1px solid rgba(255,255,255,.1)">
+      <div style="width:32px;height:32px;border-radius:8px;background:#6366f1;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0">N</div>
+      ${sidebarOpen?`<div style="overflow:hidden"><h1 style="font-size:14px;font-weight:700">Nexus OS</h1><p style="font-size:10px;color:rgba(255,255,255,.4)">Business Platform</p></div>`:''}
+      <button onclick="sidebarOpen=!sidebarOpen;render()" style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;padding:4px;font-size:16px">${sidebarOpen?'◂':'▸'}</button>
+    </div>
+    ${sidebarOpen?`<div style="padding:12px 12px;border-bottom:1px solid rgba(255,255,255,.1)">
+      <select onchange="wsId=this.value;render()" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 10px;font-size:12px;color:rgba(255,255,255,.8)">
+        ${db.workspaces.filter(w=>db.members.some(m=>m.wsId===w.id&&m.userId===auth.user.id)).map(w=>`<option value="${w.id}" ${w.id===wsId?'selected':''}>${w.name}</option>`).join('')}
+      </select>
+    </div>`:''}
+    <nav style="flex:1;overflow-y:auto;padding:12px 8px;display:flex;flex-direction:column;gap:2px">
+      ${nav.map(n=>`<a onclick="navigate('${n.id}')" class="nav-item ${currentPage===n.id?'active':''}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;font-size:14px;cursor:pointer;text-decoration:none;color:${currentPage===n.id?'white':'rgba(255,255,255,.6)'}">
+        <span style="font-size:18px;width:24px;text-align:center">${n.icon}</span>
+        ${sidebarOpen?`<span>${n.label}</span>`:''}
+      </a>`).join('')}
+    </nav>
+    <div style="border-top:1px solid rgba(255,255,255,.1);padding:12px">
+      <div style="display:flex;align-items:center;gap:${sidebarOpen?12:0}px;${sidebarOpen?'':'justify-content:center'}">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(99,102,241,.2);color:#818cf8;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">${auth.user.name[0].toUpperCase()}</div>
+        ${sidebarOpen?`<div style="flex:1;min-width:0"><p style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${auth.user.name}</p><p style="font-size:10px;color:rgba(255,255,255,.4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${auth.user.email}</p></div>
+        <button onclick="clearAuth();auth=null;render()" style="background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;padding:6px" title="Sign out">🚪</button>`:''}
+      </div>
+    </div>
+  </aside>`;
+}
+
+function renderToasts() {
+  if (!toasts.length) return '';
+  return `<div style="position:fixed;top:16px;right:16px;z-index:200;display:flex;flex-direction:column;gap:8px;width:320px">
+    ${toasts.map(t=>`<div class="toast" style="display:flex;align-items:start;gap:12px;padding:14px 16px;border-radius:12px;border:1px solid;${t.type==='error'?'background:#fef2f2;border-color:#fecaca;color:#991b1b':'background:#ecfdf5;border-color:#a7f3d0;color:#065f46'}">
+      <span style="font-size:18px">${t.type==='error'?'✕':'✓'}</span>
+      <p style="font-size:13px;flex:1">${t.msg}</p>
+      <button onclick="toasts=toasts.filter(x=>x.id!=='${t.id}');render()" style="background:none;border:none;cursor:pointer;opacity:.6">✕</button>
+    </div>`).join('')}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGES
+// ═══════════════════════════════════════════════════════════════════
+let selectedEntityId = null;
+let selectedEntityTab = 'list';
+let modalState = null;
+
+function openModal(type, data) { modalState = {type,data}; render(); }
+function closeModal() { modalState = null; render(); }
+
+function renderModal() {
+  if (!modalState) return '';
+  const m = modalState;
+  let content = '';
+  if (m.type === 'createEntity') content = renderCreateEntityModal();
+  else if (m.type === 'createRecord') content = renderCreateRecordModal();
+  else if (m.type === 'createWebsite') content = renderCreateWebsiteModal();
+  else if (m.type === 'createAutomation') content = renderCreateAutomationModal();
+  else if (m.type === 'createBot') content = renderCreateBotModal();
+  else if (m.type === 'createAgent') content = renderCreateAgentModal();
+  else if (m.type === 'createPackage') content = renderCreatePackageModal();
+  if (!content) return '';
+  return `<div class="modal-bg" style="position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px" onclick="closeModal()">
+    <div style="background:white;border-radius:16px;box-shadow:0 25px 50px rgba(0,0,0,.25);width:100%;max-width:520px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()" class="fade-in">${content}</div>
+  </div>`;
+}
+
+function renderPage() {
+  const pages = { dashboard:renderDashboard, crm:renderCRM, websites:renderWebsites, automations:renderAutomations,
+    leads:renderLeads, bots:renderBots, agents:renderAgents, generator:renderGenerator, marketplace:renderMarketplace, packages:renderPackages, settings:renderSettings };
+  return (pages[currentPage] || renderDashboard)();
+}
+
+// ─── Dashboard ─────────────────────────────────────────────────────
+function renderDashboard() {
+  const ents = getWsEntities();
+  const totalRecords = ents.reduce((s,e) => s + getEntityRecords(e.id).length, 0);
+  const webs = db.websites.filter(w=>w.wsId===wsId);
+  const autos = db.automations.filter(a=>a.wsId===wsId);
+  const bots = db.bots.filter(b=>b.wsId===wsId);
+  const agents = db.agents.filter(a=>a.wsId===wsId);
+  const stats = [
+    {label:'CRM Entities',value:ents.length,icon:'🗃️',color:'#4f46e5'},{label:'Total Records',value:totalRecords,icon:'📊',color:'#059669'},
+    {label:'Websites',value:webs.length,icon:'🌐',color:'#7c3aed'},{label:'Automations',value:autos.length,icon:'⚡',color:'#d97706'},
+    {label:'AI Bots',value:bots.length,icon:'🤖',color:'#ec4899'},{label:'AI Agents',value:agents.length,icon:'👤',color:'#6366f1'},
+  ];
+  const actions = [
+    {label:'Generate Business',desc:'AI-powered setup from natural language',icon:'✨',color:'#4f46e5',page:'generator'},
+    {label:'Browse Marketplace',desc:'Ready-made templates and solutions',icon:'🛒',color:'#059669',page:'marketplace'},
+    {label:'Create Website',desc:'Visual builder with CRM integration',icon:'🌐',color:'#7c3aed',page:'websites'},
+    {label:'Setup CRM',desc:'Custom entities, fields, pipelines',icon:'🗃️',color:'#2563eb',page:'crm'},
+  ];
+  return `
+    <div style="display:flex;align-items:center;justify-content:between;margin-bottom:24px">
+      <div><h1 style="font-size:24px;font-weight:800;color:#0f172a">Dashboard</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Welcome to ${getWs()?.name || 'Nexus OS'}</p></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:32px">
+      ${stats.map(s=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px;cursor:pointer" onclick="navigate('${s.label==='Websites'?'websites':s.label==='Automations'?'automations':s.label.includes('Bot')?'bots':s.label.includes('Agent')?'agents':'crm'}')">
+        <div style="width:40px;height:40px;border-radius:10px;background:${s.color}15;color:${s.color};display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px">${s.icon}</div>
+        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em">${s.label}</p>
+        <p style="font-size:28px;font-weight:800;color:#0f172a;margin-top:4px">${s.value}</p>
+      </div>`).join('')}
+    </div>
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">Quick Actions</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:32px">
+      ${actions.map(a=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px;cursor:pointer" onclick="navigate('${a.page}')">
+        <div style="width:48px;height:48px;border-radius:12px;background:${a.color};display:flex;align-items:center;justify-content:center;font-size:24px;color:white;margin-bottom:16px">${a.icon}</div>
+        <h3 style="font-weight:700;margin-bottom:4px">${a.label}</h3>
+        <p style="font-size:13px;color:#64748b">${a.desc}</p>
+      </div>`).join('')}
+    </div>
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">Platform Capabilities</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+      ${[
+        {title:'Business Generator',desc:'Describe your business in natural language and get a fully configured system in seconds. AI deploys CRM, website, bots, and automations automatically.',icon:'✨',color:'#4f46e5'},
+        {title:'AI Agents',desc:'Deploy intelligent digital employees that work 24/7. Sales, support, marketing agents — each with memory, tools, and collaboration.',icon:'👤',color:'#059669'},
+        {title:'Marketplace',desc:'Access hundreds of ready-made solutions. Website templates, CRM configs, automations, and complete industry packages.',icon:'🛒',color:'#7c3aed'},
+      ].map(c=>`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:24px">
+        <div style="width:48px;height:48px;border-radius:12px;background:${c.color}15;color:${c.color};display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:16px">${c.icon}</div>
+        <h3 style="font-weight:700;margin-bottom:8px">${c.title}</h3>
+        <p style="font-size:13px;color:#64748b;line-height:1.6">${c.desc}</p>
+      </div>`).join('')}
+    </div>`;
+}
+
+// ─── CRM ───────────────────────────────────────────────────────────
+function renderCRM() {
+  const ents = getWsEntities();
+  if (!selectedEntityId && ents.length) selectedEntityId = ents[0].id;
+  const sel = ents.find(e=>e.id===selectedEntityId);
+  const recs = sel ? getEntityRecords(sel.id) : [];
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div><h1 style="font-size:24px;font-weight:800">CRM</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Manage business data with dynamic entities</p></div>
+      <button class="btn btn-primary" onclick="openModal('createEntity')">+ New Entity</button>
+    </div>
+    <div style="display:flex;gap:24px">
+      <div style="width:220px;flex-shrink:0">
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:8px">
+          ${ents.length===0?'<p style="padding:16px;text-align:center;color:#94a3b8;font-size:13px">No entities yet</p>':''}
+          ${ents.map(e=>`<a onclick="selectedEntityId='${e.id}';render()" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px;${selectedEntityId===e.id?'background:#eef2ff;color:#4f46e5;font-weight:600':'color:#334155'}">
+            <span>${e.icon}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.displayName}</span>
+            <span style="font-size:11px;color:#94a3b8">${getEntityRecords(e.id).length}</span>
+          </a>`).join('')}
+        </div>
+      </div>
+      <div style="flex:1;min-width:0">
+        ${!sel?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center">
+          <p style="font-size:48px;margin-bottom:16px">🗃️</p><h3 style="font-weight:700;margin-bottom:8px">No Entities Yet</h3>
+          <p style="color:#64748b;font-size:14px;margin-bottom:24px">Create your first CRM entity to start managing data.</p>
+          <button class="btn btn-primary" onclick="openModal('createEntity')">+ Create Entity</button>
+        </div>`:`
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;border-radius:10px;background:${sel.color}15;color:${sel.color};display:flex;align-items:center;justify-content:center;font-size:20px">${sel.icon}</div>
+            <div><h2 style="font-weight:700">${sel.displayName}</h2><p style="font-size:12px;color:#64748b">${recs.length} records · ${sel.fields.length} fields</p></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <div style="display:flex;background:#f1f5f9;border-radius:8px;padding:2px">
+              <button onclick="selectedEntityTab='list';render()" style="padding:6px 10px;border-radius:6px;border:none;cursor:pointer;font-size:12px;${selectedEntityTab==='list'?'background:white;box-shadow:0 1px 3px rgba(0,0,0,.1)':'background:transparent;color:#64748b'}">☰ List</button>
+              <button onclick="selectedEntityTab='grid';render()" style="padding:6px 10px;border-radius:6px;border:none;cursor:pointer;font-size:12px;${selectedEntityTab==='grid'?'background:white;box-shadow:0 1px 3px rgba(0,0,0,.1)':'background:transparent;color:#64748b'}">⊞ Grid</button>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openModal('createRecord')">+ Add Record</button>
+          </div>
+        </div>
+        ${recs.length===0?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center">
+          <p style="font-size:36px;margin-bottom:12px">🗃️</p><p style="color:#64748b;font-size:14px;margin-bottom:16px">No records yet</p>
+          <button class="btn btn-primary btn-sm" onclick="openModal('createRecord')">+ Add Record</button>
+        </div>`:
+        selectedEntityTab==='list'?renderRecordTable(sel, recs):renderRecordGrid(sel, recs)}
+        `}
+      </div>
+    </div>`;
+}
+
+function renderRecordTable(entity, records) {
+  const fields = entity.fields.slice(0,6);
+  return `<div class="table-wrap"><table><thead><tr>${fields.map(f=>`<th>${f.label}</th>`).join('')}<th style="width:40px"></th></tr></thead>
+    <tbody>${records.map(r=>`<tr>${fields.map(f=>`<td>${renderCell(f.type, r.data[f.name])}</td>`).join('')}
+      <td><button onclick="deleteRecord('${r.id}')" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px" title="Delete">🗑</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function renderRecordGrid(entity, records) {
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+    ${records.map(r=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+        <h4 style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.data[entity.fields[0]?.name]||'Untitled'}</h4>
+        <button onclick="deleteRecord('${r.id}')" style="background:none;border:none;cursor:pointer;color:#94a3b8">🗑</button>
+      </div>
+      ${entity.fields.slice(1,5).filter(f=>r.data[f.name]).map(f=>`<div style="display:flex;gap:8px;font-size:12px;margin-bottom:6px">
+        <span style="color:#94a3b8;width:80px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.label}:</span>
+        <span style="color:#334155">${renderCell(f.type, r.data[f.name])}</span>
+      </div>`).join('')}
+      <p style="font-size:10px;color:#94a3b8;margin-top:12px">${fmtDate(r.createdAt)}</p>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderCell(type, val) {
+  if (val===undefined||val===null||val==='') return '<span style="color:#cbd5e1">—</span>';
+  if (type==='email') return `<a href="mailto:${val}" style="color:#4f46e5">${val}</a>`;
+  if (type==='phone') return `<a href="tel:${val}" style="color:#4f46e5">${val}</a>`;
+  if (type==='currency') return `<span style="font-weight:600">${fmtCurrency(val)}</span>`;
+  if (type==='select') return `<span class="badge badge-blue">${val}</span>`;
+  if (type==='boolean') return val?'<span class="badge badge-green">Yes</span>':'<span class="badge badge-gray">No</span>';
+  if (type==='rating') return '<span style="color:#f59e0b">'+'★'.repeat(val)+'☆'.repeat(5-val)+'</span>';
+  return esc(String(val));
+}
+
+function deleteRecord(id) {
+  db.records = db.records.filter(r=>r.id!==id);
+  saveDB(db); toast('Record deleted'); render();
+}
+
+function renderCreateEntityModal() {
+  return `<div style="padding:24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
+    <h3 style="font-weight:700">Create CRM Entity</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8">✕</button></div>
+    <form onsubmit="submitCreateEntity(event)" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Display Name</label><input class="input" id="eName" placeholder="Contacts" required></div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Color</label><input type="color" class="input" id="eColor" value="#6366f1" style="height:40px;padding:4px;cursor:pointer"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid #e2e8f0">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Entity</button>
+      </div>
+    </form>`;
+}
+
+function submitCreateEntity(e) {
+  e.preventDefault();
+  const name = document.getElementById('eName').value;
+  const color = document.getElementById('eColor').value;
+  db.entities.push({ id:genId(), wsId, name:name.toLowerCase().replace(/\s+/g,'_'), displayName:name, icon:'📁', color,
+    fields:[{name:'name',type:'text',label:'Name',required:true},{name:'email',type:'email',label:'Email'},{name:'phone',type:'phone',label:'Phone'},
+      {name:'status',type:'select',label:'Status',options:[{label:'Active',value:'active'},{label:'Inactive',value:'inactive'}]}], createdAt:now() });
+  saveDB(db); closeModal(); toast('Entity "'+name+'" created');
+}
+
+function renderCreateRecordModal() {
+  const ent = db.entities.find(e=>e.id===selectedEntityId);
+  if (!ent) return '';
+  return `<div style="padding:24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
+    <h3 style="font-weight:700">Add ${ent.displayName} Record</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8">✕</button></div>
+    <form onsubmit="submitCreateRecord(event)" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+      ${ent.fields.map(f=>`<div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">${f.label}${f.required?' <span style="color:#dc2626">*</span>':''}</label>
+        ${f.type==='textarea'?`<textarea class="input textarea" id="r_${f.name}" placeholder="${f.label}"></textarea>`:
+        f.type==='select'?`<select class="input" id="r_${f.name}"><option value="">Select...</option>${(f.options||[]).map(o=>`<option value="${o.value}">${o.label}</option>`).join('')}</select>`:
+        `<input class="input" id="r_${f.name}" type="${f.type==='currency'||f.type==='number'?'number':f.type==='email'?'email':f.type==='phone'?'tel':f.type==='date'?'date':f.type==='datetime'?'datetime-local':'text'}" placeholder="${f.label}">`}</div>`).join('')}
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid #e2e8f0">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Record</button>
+      </div>
+    </form>`;
+}
+
+function submitCreateRecord(e) {
+  e.preventDefault();
+  const ent = db.entities.find(e2=>e2.id===selectedEntityId);
+  if (!ent) return;
+  const data = {};
+  ent.fields.forEach(f => { const el = document.getElementById('r_'+f.name); if(el) data[f.name] = f.type==='number'||f.type==='currency'?Number(el.value):el.value; });
+  db.records.push({ id:genId(), wsId, entityId:selectedEntityId, data, createdAt:now() });
+  saveDB(db); closeModal(); toast('Record created');
+}
+
+// ─── Websites ──────────────────────────────────────────────────────
+function renderWebsites() {
+  const sites = db.websites.filter(w=>w.wsId===wsId);
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div><h1 style="font-size:24px;font-weight:800">Websites</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Build and manage your websites</p></div>
+      <button class="btn btn-primary" onclick="openModal('createWebsite')">+ Create Website</button>
+    </div>
+    ${sites.length===0?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center">
+      <p style="font-size:48px;margin-bottom:16px">🌐</p><h3 style="font-weight:700;margin-bottom:8px">No Websites Yet</h3>
+      <p style="color:#64748b;font-size:14px;margin-bottom:24px">Create your first website with our visual builder.</p>
+      <button class="btn btn-primary" onclick="openModal('createWebsite')">+ Create Website</button>
+    </div>`:`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px">
+      ${sites.map(s=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+        <div style="height:160px;background:linear-gradient(135deg,#eef2ff,#c7d2fe);display:flex;align-items:center;justify-content:center"><span style="font-size:48px;opacity:.5">🌐</span></div>
+        <div style="padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:start">
+            <div><h3 style="font-weight:700">${s.name}</h3><p style="font-size:12px;color:#64748b;margin-top:4px">/${s.slug}</p></div>
+            <span class="badge ${s.published?'badge-green':'badge-gray'}">${s.published?'Live':'Draft'}</span>
+          </div>
+          <p style="font-size:12px;color:#64748b;margin-top:12px">${(s.pages||[]).length} pages · ${fmtDate(s.createdAt)}</p>
+          <div style="display:flex;gap:8px;margin-top:16px;padding-top:16px;border-top:1px solid #f1f5f9">
+            <button class="btn btn-ghost btn-sm" style="flex:1">✏️ Edit Pages</button>
+            <button class="btn btn-ghost btn-sm" style="color:#dc2626" onclick="db.websites=db.websites.filter(w=>w.id!=='${s.id}');saveDB(db);toast('Deleted');render()">🗑</button>
+          </div>
+        </div>
+      </div>`).join('')}
+    </div>`}`;
+}
+
+function renderCreateWebsiteModal() {
+  return `<div style="padding:24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
+    <h3 style="font-weight:700">Create Website</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8">✕</button></div>
+    <form onsubmit="submitCreateWebsite(event)" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Website Name</label><input class="input" id="wName" placeholder="My Website" required></div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Template</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${['Business','Restaurant','E-Commerce','Portfolio','Landing','Clinic'].map(t=>`<label style="padding:12px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;text-align:center;font-size:13px"><input type="radio" name="wTpl" value="${t.toLowerCase()}" style="margin-right:6px">${t}</label>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid #e2e8f0">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Website</button>
+      </div>
+    </form>`;
+}
+
+function submitCreateWebsite(e) {
+  e.preventDefault();
+  const name = document.getElementById('wName').value;
+  const tpl = document.querySelector('input[name="wTpl"]:checked')?.value || 'business';
+  db.websites.push({ id:genId(), wsId, name, slug:name.toLowerCase().replace(/[^a-z0-9]+/g,'-'), templateId:tpl, published:false, pages:['Home','About','Services','Contact'], createdAt:now() });
+  saveDB(db); closeModal(); toast('Website "'+name+'" created');
+}
+
+// ─── Automations ───────────────────────────────────────────────────
+function renderAutomations() {
+  const autos = db.automations.filter(a=>a.wsId===wsId);
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div><h1 style="font-size:24px;font-weight:800">Automations</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Visual workflow automation engine</p></div>
+      <button class="btn btn-primary" onclick="openModal('createAutomation')">+ Create Automation</button>
+    </div>
+    ${autos.length===0?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center">
+      <p style="font-size:48px;margin-bottom:16px">⚡</p><h3 style="font-weight:700;margin-bottom:8px">No Automations Yet</h3>
+      <p style="color:#64748b;font-size:14px;margin-bottom:24px">Create your first automation workflow.</p>
+      <button class="btn btn-primary" onclick="openModal('createAutomation')">+ Create Automation</button>
+    </div>`:`<div style="display:flex;flex-direction:column;gap:12px">
+      ${autos.map(a=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;display:flex;align-items:center;gap:16px">
+        <div style="width:40px;height:40px;border-radius:10px;background:${a.active?'#ecfdf5':'#f1f5f9'};color:${a.active?'#059669':'#94a3b8'};display:flex;align-items:center;justify-content:center;font-size:18px">⚡</div>
+        <div style="flex:1;min-width:0"><h3 style="font-weight:600;font-size:14px">${a.name}</h3><p style="font-size:12px;color:#64748b;margin-top:2px">${a.description||''}</p></div>
+        <span class="badge ${a.active?'badge-green':'badge-gray'}">${a.active?'Active':'Paused'}</span>
+        <span style="font-size:12px;color:#94a3b8">${a.executions||0} runs</span>
+        <button style="background:none;border:none;cursor:pointer;font-size:18px;${a.active?'color:#d97706':'color:#059669'}" onclick="toggleAutomation('${a.id}')">${a.active?'⏸':'▶'}</button>
+        <button style="background:none;border:none;cursor:pointer;color:#94a3b8" onclick="db.automations=db.automations.filter(x=>x.id!=='${a.id}');saveDB(db);toast('Deleted');render()">🗑</button>
+      </div>`).join('')}
+    </div>`}`;
+}
+
+function toggleAutomation(id) {
+  const a = db.automations.find(x=>x.id===id);
+  if (a) { a.active = !a.active; saveDB(db); toast(a.active?'Activated':'Paused'); render(); }
+}
+
+function renderCreateAutomationModal() {
+  return `<div style="padding:24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
+    <h3 style="font-weight:700">Create Automation</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8">✕</button></div>
+    <form onsubmit="submitCreateAutomation(event)" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Name</label><input class="input" id="aName" placeholder="Lead Follow-up" required></div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Description</label><textarea class="input textarea" id="aDesc" placeholder="What does this automation do?"></textarea></div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Trigger Type</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${[{v:'event',l:'Event Trigger',d:'When something happens'},{v:'schedule',l:'Schedule',d:'Run at specific times'},{v:'webhook',l:'Webhook',d:'External HTTP trigger'},{v:'manual',l:'Manual',d:'Run on demand'}].map(t=>`<label style="padding:12px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer"><input type="radio" name="aTrigger" value="${t.v}" style="margin-right:6px"><b style="font-size:13px">${t.l}</b><br><span style="font-size:11px;color:#64748b">${t.d}</span></label>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid #e2e8f0">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Automation</button>
+      </div>
+    </form>`;
+}
+
+function submitCreateAutomation(e) {
+  e.preventDefault();
+  const name = document.getElementById('aName').value;
+  const desc = document.getElementById('aDesc').value;
+  const trigger = document.querySelector('input[name="aTrigger"]:checked')?.value || 'event';
+  db.automations.push({ id:genId(), wsId, name, description:desc, trigger:{type:trigger}, active:false, executions:0, createdAt:now() });
+  saveDB(db); closeModal(); toast('Automation "'+name+'" created');
+}
+
+// ─── AI Bots ───────────────────────────────────────────────────────
+function renderBots() {
+  const bots = db.bots.filter(b=>b.wsId===wsId);
+  const ch = {web:'🌐',whatsapp:'💬',telegram:'📱',instagram:'📸',facebook:'👤',email:'📧',sms:'📲'};
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div><h1 style="font-size:24px;font-weight:800">AI Bots</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Intelligent conversational assistants</p></div>
+      <button class="btn btn-primary" onclick="openModal('createBot')">+ Create Bot</button>
+    </div>
+    ${bots.length===0?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center">
+      <p style="font-size:48px;margin-bottom:16px">🤖</p><h3 style="font-weight:700;margin-bottom:8px">No AI Bots Yet</h3>
+      <p style="color:#64748b;font-size:14px;margin-bottom:24px">Create your first intelligent bot assistant.</p>
+      <button class="btn btn-primary" onclick="openModal('createBot')">+ Create Bot</button>
+    </div>`:`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+      ${bots.map(b=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <div style="display:flex;gap:12px;margin-bottom:12px">
+          <div style="width:48px;height:48px;border-radius:12px;background:#fdf2f8;color:#ec4899;display:flex;align-items:center;justify-content:center;font-size:24px">🤖</div>
+          <div style="flex:1"><h3 style="font-weight:700">${b.name}</h3><p style="font-size:12px;color:#64748b">${b.type} bot</p></div>
+          <span class="badge ${b.active?'badge-green':'badge-gray'}">${b.active?'Online':'Offline'}</span>
+        </div>
+        <p style="font-size:13px;color:#64748b;margin-bottom:12px">${b.description||''}</p>
+        <div style="display:flex;gap:4px;margin-bottom:12px">${(b.channels||[]).map(c=>`<span style="font-size:16px" title="${c}">${ch[c]||'🔗'}</span>`).join('')}</div>
+        <div style="display:flex;gap:8px;padding-top:12px;border-top:1px solid #f1f5f9">
+          <button class="btn btn-ghost btn-sm" style="flex:1">⚙️ Configure</button>
+          <button class="btn btn-ghost btn-sm" style="color:#dc2626" onclick="db.bots=db.bots.filter(x=>x.id!=='${b.id}');saveDB(db);toast('Deleted');render()">🗑</button>
+        </div>
+      </div>`).join('')}
+    </div>`}`;
+}
+
+function renderCreateBotModal() {
+  return `<div style="padding:24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
+    <h3 style="font-weight:700">Create AI Bot</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8">✕</button></div>
+    <form onsubmit="submitCreateBot(event)" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Bot Name</label><input class="input" id="bName" placeholder="Support Bot" required></div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Description</label><textarea class="input textarea" id="bDesc" placeholder="What does this bot do?"></textarea></div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Type</label>
+        <select class="input" id="bType">${['support','sales','booking','appointment','lead_capture','custom'].map(t=>`<option value="${t}">${t}</option>`).join('')}</select>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid #e2e8f0">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Bot</button>
+      </div>
+    </form>`;
+}
+
+function submitCreateBot(e) {
+  e.preventDefault();
+  const name = document.getElementById('bName').value;
+  const desc = document.getElementById('bDesc').value;
+  const type = document.getElementById('bType').value;
+  db.bots.push({ id:genId(), wsId, name, type, description:desc, channels:['web','whatsapp'], active:true, createdAt:now() });
+  saveDB(db); closeModal(); toast('Bot "'+name+'" created');
+}
+
+// ─── AI Agents ─────────────────────────────────────────────────────
+function renderAgents() {
+  const agents = db.agents.filter(a=>a.wsId===wsId);
+  const roleColors = {sales:'#f59e0b',marketing:'#ec4899',support:'#10b981',assistant:'#6366f1',hr:'#8b5cf6',finance:'#3b82f6'};
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div><h1 style="font-size:24px;font-weight:800">AI Agents</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Digital employees that work 24/7</p></div>
+      <button class="btn btn-primary" onclick="openModal('createAgent')">+ Create Agent</button>
+    </div>
+    ${agents.length===0?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center">
+      <p style="font-size:48px;margin-bottom:16px">👤</p><h3 style="font-weight:700;margin-bottom:8px">No AI Agents Yet</h3>
+      <p style="color:#64748b;font-size:14px;margin-bottom:24px">Deploy your first digital employee.</p>
+      <button class="btn btn-primary" onclick="openModal('createAgent')">+ Create Agent</button>
+    </div>`:`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+      ${agents.map(a=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <div style="display:flex;gap:12px;margin-bottom:12px">
+          <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#e0e7ff,#c7d2fe);display:flex;align-items:center;justify-content:center;font-size:24px">🧠</div>
+          <div style="flex:1"><h3 style="font-weight:700">${a.name}</h3>
+            <span class="badge" style="background:${roleColors[a.role]||'#6366f1'}15;color:${roleColors[a.role]||'#6366f1'}">${a.role}</span>
+          </div>
+          <span class="badge ${a.active?'badge-green':'badge-gray'}">${a.active?'Active':'Inactive'}</span>
+        </div>
+        <p style="font-size:13px;color:#64748b;margin-bottom:12px">${a.description||''}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">${(a.tools||[]).map(t=>`<span class="badge badge-gray">${t}</span>`).join('')}</div>
+        <div style="display:flex;gap:8px;padding-top:12px;border-top:1px solid #f1f5f9">
+          <button class="btn btn-ghost btn-sm" style="flex:1">⚡ Assign Task</button>
+          <button class="btn btn-ghost btn-sm" style="color:#dc2626" onclick="db.agents=db.agents.filter(x=>x.id!=='${a.id}');saveDB(db);toast('Deleted');render()">🗑</button>
+        </div>
+      </div>`).join('')}
+    </div>`}`;
+}
+
+function renderCreateAgentModal() {
+  return `<div style="padding:24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
+    <h3 style="font-weight:700">Create AI Agent</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8">✕</button></div>
+    <form onsubmit="submitCreateAgent(event)" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Agent Name</label><input class="input" id="agName" placeholder="Sales Agent" required></div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Role</label>
+        <select class="input" id="agRole">${['sales','marketing','support','hr','finance','assistant'].map(r=>`<option value="${r}">${r}</option>`).join('')}</select>
+      </div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Description</label><textarea class="input textarea" id="agDesc" placeholder="What does this agent do?"></textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid #e2e8f0">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Agent</button>
+      </div>
+    </form>`;
+}
+
+function submitCreateAgent(e) {
+  e.preventDefault();
+  const name = document.getElementById('agName').value;
+  const role = document.getElementById('agRole').value;
+  const desc = document.getElementById('agDesc').value;
+  db.agents.push({ id:genId(), wsId, name, role, description:desc, tools:['crm','email','calendar'], active:true, createdAt:now() });
+  saveDB(db); closeModal(); toast('Agent "'+name+'" created');
+}
+
+// ─── Generator ─────────────────────────────────────────────────────
+let genStep = 'input', genPreview = null, genDesc = '';
+const INDUSTRIES = {
+  dental:{name:'Dental Clinic',entities:[{name:'patients',displayName:'Patients',icon:'👤',color:'#10b981',fields:[{name:'first_name',type:'text',label:'First Name',required:true},{name:'last_name',type:'text',label:'Last Name',required:true},{name:'phone',type:'phone',label:'Phone',required:true},{name:'insurance',type:'text',label:'Insurance'},{name:'status',type:'select',label:'Status',options:[{label:'Active',value:'active'},{label:'Inactive',value:'inactive'}]}]},{name:'appointments',displayName:'Appointments',icon:'📅',color:'#6366f1',fields:[{name:'patient',type:'text',label:'Patient',required:true},{name:'doctor',type:'text',label:'Doctor',required:true},{name:'date',type:'datetime',label:'Date',required:true},{name:'type',type:'select',label:'Type',options:[{label:'Checkup',value:'checkup'},{label:'Cleaning',value:'cleaning'},{label:'Filling',value:'filling'}]},{name:'status',type:'select',label:'Status',options:[{label:'Scheduled',value:'scheduled'},{label:'Confirmed',value:'confirmed'},{label:'Completed',value:'completed'}]}]}],bots:[{name:'Appointment Bot',type:'appointment',desc:'Handles booking and reminders',channels:['whatsapp','web']}],agents:[{name:'Patient Coordinator',role:'patient_coordinator',desc:'Manages patient communications',tools:['crm','calendar']}],automations:[{name:'Appointment Reminder',desc:'Send reminder 24h before',trigger:{type:'schedule'}}],website:{pages:['Home','Services','Doctors','Book Appointment','Contact']}},
+  restaurant:{name:'Restaurant',entities:[{name:'guests',displayName:'Guests',icon:'👥',color:'#ef4444',fields:[{name:'name',type:'text',label:'Name',required:true},{name:'phone',type:'phone',label:'Phone',required:true},{name:'preferences',type:'textarea',label:'Preferences'}]},{name:'reservations',displayName:'Reservations',icon:'📅',color:'#f59e0b',fields:[{name:'guest',type:'text',label:'Guest',required:true},{name:'date',type:'datetime',label:'Date',required:true},{name:'party_size',type:'number',label:'Party Size',required:true},{name:'status',type:'select',label:'Status',options:[{label:'Confirmed',value:'confirmed'},{label:'Pending',value:'pending'}]}]}],bots:[{name:'Reservation Bot',type:'booking',desc:'Handles table reservations',channels:['whatsapp','web']}],agents:[{name:'Floor Manager',role:'floor_manager',desc:'Manages reservations',tools:['crm','calendar']}],automations:[{name:'Reservation Confirmation',desc:'Auto-confirm and remind',trigger:{type:'event'}}],website:{pages:['Home','Menu','Reservations','Gallery','Contact']}},
+  ecommerce:{name:'E-Commerce Store',entities:[{name:'customers',displayName:'Customers',icon:'👤',color:'#3b82f6',fields:[{name:'name',type:'text',label:'Name',required:true},{name:'email',type:'email',label:'Email',required:true},{name:'total_spent',type:'currency',label:'Total Spent'}]},{name:'orders',displayName:'Orders',icon:'🛒',color:'#10b981',fields:[{name:'customer',type:'text',label:'Customer',required:true},{name:'total',type:'currency',label:'Total',required:true},{name:'status',type:'select',label:'Status',options:[{label:'Pending',value:'pending'},{label:'Shipped',value:'shipped'},{label:'Delivered',value:'delivered'}]}]}],bots:[{name:'Sales Bot',type:'sales',desc:'Product recommendations',channels:['web','whatsapp']}],agents:[{name:'Sales Agent',role:'sales',desc:'Handles inquiries and cart recovery',tools:['crm','email']}],automations:[{name:'Cart Recovery',desc:'Email for abandoned carts',trigger:{type:'event'}}],website:{pages:['Home','Shop','Cart','Checkout','Contact']}},
+  fitness:{name:'Fitness Club',entities:[{name:'members',displayName:'Members',icon:'👤',color:'#10b981',fields:[{name:'name',type:'text',label:'Name',required:true},{name:'phone',type:'phone',label:'Phone',required:true},{name:'membership',type:'select',label:'Membership',options:[{label:'Basic',value:'basic'},{label:'Premium',value:'premium'}]}]}],bots:[{name:'Membership Bot',type:'sales',desc:'Membership inquiries',channels:['web','whatsapp']}],agents:[{name:'Member Success',role:'member_success',desc:'Tracks engagement',tools:['crm','email']}],automations:[{name:'Renewal Reminder',desc:'Remind before expiry',trigger:{type:'schedule'}}],website:{pages:['Home','Classes','Membership','Contact']}},
+  realestate:{name:'Real Estate Agency',entities:[{name:'leads',displayName:'Leads',icon:'👤',color:'#3b82f6',fields:[{name:'name',type:'text',label:'Name',required:true},{name:'phone',type:'phone',label:'Phone',required:true},{name:'budget',type:'currency',label:'Budget'}]},{name:'properties',displayName:'Properties',icon:'🏠',color:'#10b981',fields:[{name:'title',type:'text',label:'Title',required:true},{name:'price',type:'currency',label:'Price',required:true},{name:'bedrooms',type:'number',label:'Bedrooms'}]}],bots:[{name:'Property Bot',type:'sales',desc:'Shows properties',channels:['web','whatsapp']}],agents:[{name:'Lead Qualifier',role:'lead_qualifier',desc:'Qualifies leads',tools:['crm','email']}],automations:[{name:'Listing Alert',desc:'Notify about new properties',trigger:{type:'event'}}],website:{pages:['Home','Properties','Agents','Contact']}},
+  spa:{name:'SPA & Wellness',entities:[{name:'clients',displayName:'Clients',icon:'👤',color:'#ec4899',fields:[{name:'name',type:'text',label:'Name',required:true},{name:'phone',type:'phone',label:'Phone',required:true}]},{name:'bookings',displayName:'Bookings',icon:'📅',color:'#8b5cf6',fields:[{name:'client',type:'text',label:'Client',required:true},{name:'service',type:'select',label:'Service',options:[{label:'Massage',value:'massage'},{label:'Facial',value:'facial'}]},{name:'date',type:'datetime',label:'Date',required:true}]}],bots:[{name:'Booking Bot',type:'booking',desc:'Service booking',channels:['whatsapp','web']}],agents:[{name:'Client Care',role:'client_care',desc:'Client relationships',tools:['crm','email']}],automations:[{name:'Booking Reminder',desc:'Remind before appointments',trigger:{type:'schedule'}}],website:{pages:['Home','Services','Book Now','Gallery','Contact']}},
+  legal:{name:'Law Firm',entities:[{name:'clients',displayName:'Clients',icon:'👤',color:'#1e40af',fields:[{name:'name',type:'text',label:'Name',required:true},{name:'phone',type:'phone',label:'Phone',required:true}]},{name:'cases',displayName:'Cases',icon:'💼',color:'#f59e0b',fields:[{name:'title',type:'text',label:'Title',required:true},{name:'client',type:'text',label:'Client',required:true},{name:'status',type:'select',label:'Status',options:[{label:'Open',value:'open'},{label:'Closed',value:'closed'}]}]}],bots:[{name:'Intake Bot',type:'lead_capture',desc:'Collects case details',channels:['web']}],agents:[{name:'Case Manager',role:'case_manager',desc:'Tracks deadlines',tools:['crm','calendar']}],automations:[{name:'Deadline Alert',desc:'Alert upcoming deadlines',trigger:{type:'schedule'}}],website:{pages:['Home','Practice Areas','Attorneys','Contact']}},
+};
+function detectIndustry(d) { const l=d.toLowerCase(); for(const[k,v] of Object.entries({dental:['dental','dentist','стоматолог'],restaurant:['restaurant','cafe','ресторан'],ecommerce:['shop','store','магазин'],fitness:['fitness','gym','фитнес'],realestate:['real estate','недвижимость'],spa:['spa','massage','салон'],legal:['law','legal','юридическ']})) if(v.some(w=>l.includes(w))) return k; return null; }
+
+function renderGenerator() {
+  const examples = [
+    "Create a dental clinic with online booking and patient management",
+    "Build a restaurant with reservations and delivery",
+    "Set up an e-commerce store with products and support",
+    "Create a fitness club with class scheduling",
+    "Build a real estate agency with property listings",
+    "Create a SPA and wellness center with booking",
+    "Set up a law firm with case management",
+  ];
+  if (genStep==='input') return `
+    <div style="max-width:720px;margin:0 auto">
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
+        <h2 style="font-size:20px;font-weight:700;margin-bottom:16px">What business do you want to create?</h2>
+        <textarea class="input textarea" id="genInput" style="min-height:120px;font-size:15px" placeholder="Describe your business... e.g., 'Create a dental clinic with online booking, patient management, and WhatsApp appointment bot'">${genDesc}</textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">
+          <p style="font-size:12px;color:#94a3b8">Press Generate to analyze</p>
+          <button class="btn btn-primary btn-lg" onclick="runGenerator()">✨ Analyze & Generate</button>
+        </div>
+      </div>
+      <p style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin:24px 0 12px">Try these examples</p>
+      ${examples.map(ex=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px" onclick="genDesc='${esc(ex)}';document.getElementById('genInput').value=genDesc;runGenerator()">
+        <span style="color:#818cf8">✨</span><span style="font-size:14px;color:#334155">${ex}</span><span style="margin-left:auto;color:#94a3b8">▸</span>
+      </div>`).join('')}
+    </div>`;
+
+  if (genStep==='preview' && genPreview) {
+    const p = genPreview;
+    return `<div style="max-width:800px;margin:0 auto">
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:16px;padding:24px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px">
+          <div style="width:48px;height:48px;border-radius:12px;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:24px">✨</div>
+          <div><h2 style="font-size:20px;font-weight:700">${p.name}</h2><p style="font-size:14px;color:#64748b">Industry: ${p.industry} · Setup: ${p.estimatedSetupTime}</p></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px">
+          ${[{l:'CRM Entities',c:p.componentCount.entities,i:'🗃️'},{l:'AI Bots',c:p.componentCount.bots,i:'🤖'},{l:'AI Agents',c:p.componentCount.agents,i:'👤'},{l:'Automations',c:p.componentCount.automations,i:'⚡'},{l:'Website Pages',c:p.componentCount.websitePages,i:'🌐'}].map(s=>`<div style="text-align:center;padding:12px;background:#f8fafc;border-radius:10px"><p style="font-size:24px">${s.i}</p><p style="font-size:24px;font-weight:800">${s.c}</p><p style="font-size:10px;color:#94a3b8">${s.l}</p></div>`).join('')}
+        </div>
+      </div>
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:12px">
+        <h3 style="font-weight:700;margin-bottom:12px">🗃️ CRM Entities</h3>
+        ${p.entities.map(e=>`<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#f8fafc;border-radius:8px;margin-bottom:8px">
+          <div style="width:32px;height:32px;border-radius:8px;background:${e.color}20;display:flex;align-items:center;justify-content:center">${e.icon}</div>
+          <div style="flex:1"><p style="font-weight:600;font-size:14px">${e.displayName}</p><p style="font-size:12px;color:#64748b">${e.fields.length} fields</p></div>
+          <div style="display:flex;gap:4px">${e.fields.slice(0,4).map(f=>`<span class="badge badge-gray">${f.label}</span>`).join('')}${e.fields.length>4?`<span class="badge badge-gray">+${e.fields.length-4}</span>`:''}</div>
+        </div>`).join('')}
+      </div>
+      ${p.bots.length?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:12px">
+        <h3 style="font-weight:700;margin-bottom:12px">🤖 AI Bots</h3>
+        ${p.bots.map(b=>`<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#f8fafc;border-radius:8px;margin-bottom:8px"><span>🤖</span><div style="flex:1"><p style="font-weight:600;font-size:14px">${b.name}</p><p style="font-size:12px;color:#64748b">${b.desc}</p></div><div style="display:flex;gap:4px">${b.channels.map(c=>`<span class="badge badge-gray">${c}</span>`).join('')}</div></div>`).join('')}
+      </div>`:''}
+      ${p.agents.length?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:12px">
+        <h3 style="font-weight:700;margin-bottom:12px">👤 AI Agents</h3>
+        ${p.agents.map(a=>`<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#f8fafc;border-radius:8px;margin-bottom:8px"><span>👤</span><div style="flex:1"><p style="font-weight:600;font-size:14px">${a.name}</p><p style="font-size:12px;color:#64748b">${a.desc}</p></div><div style="display:flex;gap:4px">${a.tools.map(t=>`<span class="badge badge-gray">${t}</span>`).join('')}</div></div>`).join('')}
+      </div>`:''}
+      ${p.automations.length?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:16px">
+        <h3 style="font-weight:700;margin-bottom:12px">⚡ Automations</h3>
+        ${p.automations.map(a=>`<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#f8fafc;border-radius:8px;margin-bottom:8px"><span>⚡</span><div><p style="font-weight:600;font-size:14px">${a.name}</p><p style="font-size:12px;color:#64748b">${a.desc}</p></div></div>`).join('')}
+      </div>`:''}
+      <div style="display:flex;justify-content:space-between">
+        <button class="btn btn-secondary" onclick="genStep='input';genPreview=null;render()">← Start Over</button>
+        <button class="btn btn-primary btn-lg" onclick="deployGenerated()">🚀 Deploy Everything</button>
+      </div>
+    </div>`;
+
+  if (genStep==='deploying') return `<div style="max-width:400px;margin:80px auto;text-align:center">
+    <div style="font-size:64px;margin-bottom:24px;animation:spin 1s linear infinite">⏳</div>
+    <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Deploying Your Business</h2>
+    <p style="color:#64748b">Setting up CRM, website, bots, agents, and automations...</p>
+    <style>@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>
+  </div>`;
+
+  if (genStep==='done') return `<div style="max-width:500px;margin:48px auto;text-align:center">
+    <div style="width:80px;height:80px;border-radius:50%;background:#ecfdf5;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:40px">✓</div>
+    <h2 style="font-size:24px;font-weight:800;margin-bottom:8px">Business Deployed! 🎉</h2>
+    <p style="color:#64748b;margin-bottom:32px">All modules are ready. Start using them from the dashboard.</p>
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button class="btn btn-secondary" onclick="genStep='input';genPreview=null;genDesc='';render()">Create Another</button>
+      <button class="btn btn-primary" onclick="navigate('dashboard')">Go to Dashboard</button>
+    </div>
+  </div>`;
+}
+
+function runGenerator() {
+  genDesc = document.getElementById('genInput')?.value || genDesc;
+  if (!genDesc.trim()) return;
+  const ind = detectIndustry(genDesc);
+  const tpl = ind ? INDUSTRIES[ind] : {name:genDesc,entities:[{name:'contacts',displayName:'Contacts',icon:'👤',color:'#6366f1',fields:[{name:'name',type:'text',label:'Name',required:true},{name:'email',type:'email',label:'Email'},{name:'phone',type:'phone',label:'Phone'},{name:'status',type:'select',label:'Status',options:[{label:'Lead',value:'lead'},{label:'Customer',value:'customer'}]}]},{name:'deals',displayName:'Deals',icon:'📈',color:'#10b981',fields:[{name:'title',type:'text',label:'Title',required:true},{name:'value',type:'currency',label:'Value'},{name:'stage',type:'select',label:'Stage',options:[{label:'New',value:'new'},{label:'Won',value:'won'}]}]}],bots:[{name:'Lead Capture Bot',type:'lead_capture',desc:'Captures and qualifies leads',channels:['web','whatsapp']}],agents:[{name:'Business Assistant',role:'assistant',desc:'Helps with operations',tools:['crm','email']}],automations:[{name:'Lead Follow-up',desc:'Auto follow-up for new leads',trigger:{type:'event'}}],website:{pages:['Home','Services','About','Contact']}};
+  genPreview = { ...tpl, industry:ind||'general', estimatedSetupTime:'45 seconds',
+    componentCount:{entities:tpl.entities.length,bots:tpl.bots.length,agents:tpl.agents.length,automations:tpl.automations.length,websitePages:tpl.website.pages.length} };
+  genStep = 'preview';
+  render();
+}
+
+function deployGenerated() {
+  genStep = 'deploying'; render();
+  setTimeout(() => {
+    const p = genPreview;
+    p.entities.forEach(e => { db.entities.push({ id:genId(), wsId, name:e.name, displayName:e.displayName, icon:e.icon||'📁', color:e.color||'#6366f1', fields:e.fields, createdAt:now() }); });
+    p.bots.forEach(b => { db.bots.push({ id:genId(), wsId, name:b.name, type:b.type, description:b.desc, channels:b.channels, active:true, createdAt:now() }); });
+    p.agents.forEach(a => { db.agents.push({ id:genId(), wsId, name:a.name, role:a.role, description:a.desc, tools:a.tools, active:true, createdAt:now() }); });
+    p.automations.forEach(a => { db.automations.push({ id:genId(), wsId, name:a.name, description:a.desc, trigger:a.trigger, active:false, executions:0, createdAt:now() }); });
+    db.websites.push({ id:genId(), wsId, name:p.name, slug:p.name.toLowerCase().replace(/[^a-z0-9]+/g,'-'), published:false, pages:p.website.pages, createdAt:now() });
+    saveDB(db);
+    genStep = 'done'; render();
+    toast('Business deployed successfully!');
+  }, 1500);
+}
+
+// ─── Marketplace ───────────────────────────────────────────────────
+function renderMarketplace() {
+// ─── Lead Generation Engine ────────────────────────────────────────
+let leadsData = [];
+let leadsSearching = false;
+let leadsSearchProgress = 0;
+let leadsIndustry = '';
+let leadsLocation = '';
+let leadsSource = 'google_maps';
+
+const LEAD_SOURCES = [
+  {id:'google_maps',name:'Google Maps',icon:'🗺️',desc:'Local businesses from Google Maps'},
+  {id:'instagram',name:'Instagram',icon:'📸',desc:'Business profiles on Instagram'},
+  {id:'facebook',name:'Facebook',icon:'👤',desc:'Facebook business pages'},
+  {id:'linkedin',name:'LinkedIn',icon:'💼',desc:'Professional profiles and companies'},
+  {id:'avito',name:'Avito',icon:'🏷️',desc:'Russian classifieds platform'},
+  {id:'yandex_maps',name:'Yandex Maps',icon:'📍',desc:'Russian businesses from Yandex'},
+  {id:'website',name:'Website Crawl',icon:'🌐',desc:'Find leads from websites'},
+];
+
+const INDUSTRY_LEADS = {
+  dental:{name:'Dental Clinics',prefixes:['Dr. ','Smile ','Bright ','White ','Dental ','Care '],suffixes:['Dental','Dentistry','Dental Care','Smile Center','Dental Clinic','Orthodontics']},
+  restaurant:{name:'Restaurants',prefixes:['','The ','Golden ','Fresh ','Royal ','Urban '],suffixes:['Restaurant','Cafe','Bistro','Eatery','Kitchen','Grill']},
+  ecommerce:{name:'E-Commerce',prefixes:['','Shop','Store','Buy','Deal ','Mega '],suffixes:['Store','Shop','Market','Outlet','Deals','Online']},
+  fitness:{name:'Fitness Clubs',prefixes:['','Power','Fit','Strong','Peak ','Pro '],suffixes:['Gym','Fitness','Fit Club','Training','CrossFit','Wellness']},
+  realestate:{name:'Real Estate',prefixes:['','Prime','Elite','Home','Key ','Metro '],suffixes:['Realty','Real Estate','Properties','Homes','Estates','Living']},
+  spa:{name:'SPA & Beauty',prefixes:['','Glow','Zen','Relax','Beauty ','Silk '],suffixes:['SPA','Wellness','Beauty','Salon','Studio','Retreat']},
+  legal:{name:'Law Firms',prefixes:['','Pro','Justice','Liberty','Right ','Prime '],suffixes:['Law','Legal','Attorneys','Law Firm','Legal Group','Associates']},
+  clinic:{name:'Medical Clinics',prefixes:['','Health','Med','Care','Vita ','Life '],suffixes:['Clinic','Medical','Health Center','Healthcare','Med Center']},
+  hotel:{name:'Hotels',prefixes:['','Grand','Royal','Sky','Palm ','Blue '],suffixes:['Hotel','Inn','Resort','Suites','Lodge','Stay']},
+  auto:{name:'Auto Services',prefixes:['','Auto','Car','Motor','Drive ','Turbo '],suffixes:['Service','Auto','Motors','Garage','Repair','Center']},
+};
+
+function generateFakeLeads(industry, count) {
+  const ind = INDUSTRY_LEADS[industry] || INDUSTRY_LEADS.dental;
+  const leads = [];
+  const cities = ['New York','Los Angeles','Chicago','Houston','Miami','London','Berlin','Paris','Tokyo','Moscow','Dubai','Singapore','Sydney','Toronto','Mumbai'];
+  const domains = ['gmail.com','outlook.com','yahoo.com','company.com','business.org'];
+  for (let i = 0; i < count; i++) {
+    const prefix = ind.prefixes[Math.floor(Math.random()*ind.prefixes.length)];
+    const suffix = ind.suffixes[Math.floor(Math.random()*ind.suffixes.length)];
+    const name = prefix + suffix;
+    const city = cities[Math.floor(Math.random()*cities.length)];
+    const score = Math.floor(Math.random()*60)+40;
+    const phone = '+1 '+Math.floor(Math.random()*900+100)+'-'+Math.floor(Math.random()*900+100)+'-'+Math.floor(Math.random()*9000+1000);
+    const email = name.toLowerCase().replace(/[^a-z]/g,'').slice(0,12)+'@'+domains[Math.floor(Math.random()*domains.length)];
+    const revenue = ['$100K-$500K','$500K-$1M','$1M-$5M','$5M-$10M','$10M+'][Math.floor(Math.random()*5)];
+    const employees = ['1-10','11-50','51-200','201-500','500+'][Math.floor(Math.random()*5)];
+    const hasWebsite = Math.random() > 0.3;
+    const hasSocial = Math.random() > 0.4;
+    leads.push({id:genId(),name,industry:ind.name,city,phone,email,score,revenue,employees,hasWebsite,hasSocial,
+      source:LEAD_SOURCES.find(s=>s.id===leadsSource)?.name||'Google Maps',
+      status:'new',createdAt:now(),notes:''});
+  }
+  return leads.sort((a,b)=>b.score-a.score);
+}
+
+function renderLeads() {
+  const scoreColor = (s) => s>=80?'#059669':s>=60?'#d97706':'#dc2626';
+  const scoreBadge = (s) => s>=80?'badge-green':s>=60?'badge-amber':'badge-red';
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div><h1 style="font-size:24px;font-weight:800">🎯 Lead Generation Engine</h1><p style="font-size:14px;color:#64748b;margin-top:4px">AI-powered lead discovery and outreach automation</p></div>
+    </div>
+
+    <!-- Search Panel -->
+    <div style="background:white;border:1px solid #e2e8f0;border-radius:16px;padding:24px;margin-bottom:24px">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:16px">🔍 Find New Leads</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+        <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Industry</label>
+          <select class="input" id="leadIndustry" onchange="leadsIndustry=this.value">
+            <option value="">Select industry...</option>
+            ${Object.entries(INDUSTRY_LEADS).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('')}
+          </select>
+        </div>
+        <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Location</label>
+          <input class="input" id="leadLocation" placeholder="City, country, or radius" value="${leadsLocation}">
+        </div>
+        <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Source</label>
+          <select class="input" id="leadSource" onchange="leadsSource=this.value">
+            ${LEAD_SOURCES.map(s=>`<option value="${s.id}" ${leadsSource===s.id?'selected':''}>${s.icon} ${s.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary" onclick="startLeadSearch()" ${leadsSearching?'disabled':''}>
+          ${leadsSearching?'⏳ Searching...':'🔍 Search Leads'}
+        </button>
+        ${leadsSearching?`<div style="flex:1;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden"><div style="height:100%;background:#4f46e5;border-radius:4px;width:${leadsSearchProgress}%;transition:width .3s"></div></div><span style="font-size:12px;color:#64748b">${leadsSearchProgress}%</span>`:''}
+        ${leadsData.length>0?`<span style="font-size:13px;color:#64748b;margin-left:auto">${leadsData.length} leads found</span>`:''}
+      </div>
+    </div>
+
+    <!-- Source Cards -->
+    ${leadsData.length===0?`
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px">
+      ${LEAD_SOURCES.map(s=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center;cursor:pointer" onclick="leadsSource='${s.id}';document.getElementById('leadSource').value='${s.id}'">
+        <p style="font-size:32px;margin-bottom:8px">${s.icon}</p>
+        <h4 style="font-weight:600;font-size:13px">${s.name}</h4>
+        <p style="font-size:11px;color:#64748b;margin-top:4px">${s.desc}</p>
+      </div>`).join('')}
+    </div>
+    <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center">
+      <p style="font-size:48px;margin-bottom:16px">🎯</p>
+      <h3 style="font-weight:700;margin-bottom:8px">Ready to Find Leads</h3>
+      <p style="color:#64748b;font-size:14px;max-width:480px;margin:0 auto">Select an industry, location, and source above. Our AI will find, qualify, and score potential customers for your business.</p>
+    </div>`:`
+
+    <!-- Stats -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px">
+      ${[
+        {l:'Total Leads',v:leadsData.length,i:'📊',c:'#4f46e5'},
+        {l:'Hot (80+)',v:leadsData.filter(l=>l.score>=80).length,i:'🔥',c:'#dc2626'},
+        {l:'Warm (60-79)',v:leadsData.filter(l=>l.score>=60&&l.score<80).length,i:'🌡️',c:'#d97706'},
+        {l:'With Website',v:leadsData.filter(l=>l.hasWebsite).length,i:'🌐',c:'#059669'},
+        {l:'With Social',v:leadsData.filter(l=>l.hasSocial).length,i:'📱',c:'#7c3aed'},
+      ].map(s=>`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center">
+        <p style="font-size:20px">${s.i}</p>
+        <p style="font-size:24px;font-weight:800;color:${s.c}">${s.v}</p>
+        <p style="font-size:11px;color:#64748b">${s.l}</p>
+      </div>`).join('')}
+    </div>
+
+    <!-- Lead Table -->
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="btn btn-primary btn-sm" onclick="autoOutreach()">📧 Auto Outreach (${leadsData.filter(l=>l.status==='new').length} leads)</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportLeads()">📥 Export CSV</button>
+      <button class="btn btn-secondary btn-sm" onclick="importToCRM()">🗃️ Import to CRM</button>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th>Company</th><th>Score</th><th>Location</th><th>Phone</th><th>Email</th><th>Revenue</th><th>Employees</th><th>Source</th><th>Status</th><th>Actions</th>
+      </tr></thead>
+      <tbody>${leadsData.map(l=>`<tr>
+        <td><div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">${l.hasWebsite?'🌐':'📋'}</span><div><p style="font-weight:600;font-size:13px">${l.name}</p><p style="font-size:11px;color:#64748b">${l.industry}</p></div></div></td>
+        <td><span class="badge ${scoreBadge(l.score)}" style="font-weight:700">${l.score}</span></td>
+        <td style="font-size:13px">${l.city}</td>
+        <td style="font-size:12px"><a href="tel:${l.phone}" style="color:#4f46e5">${l.phone}</a></td>
+        <td style="font-size:12px"><a href="mailto:${l.email}" style="color:#4f46e5">${l.email}</a></td>
+        <td style="font-size:12px">${l.revenue}</td>
+        <td style="font-size:12px">${l.employees}</td>
+        <td><span class="badge badge-gray">${l.source}</span></td>
+        <td><span class="badge ${l.status==='contacted'?'badge-blue':l.status==='qualified'?'badge-green':'badge-gray'}">${l.status}</span></td>
+        <td>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm" onclick="contactLead('${l.id}')" title="Contact">📧</button>
+            <button class="btn btn-ghost btn-sm" onclick="qualifyLead('${l.id}')" title="Qualify">✓</button>
+            <button class="btn btn-ghost btn-sm" onclick="leadsData=leadsData.filter(x=>x.id!=='${l.id}');render()" title="Remove">🗑</button>
+          </div>
+        </td>
+      </tr>`).join('')}</tbody></table>
+    </div>`}
+  `;
+}
+
+function startLeadSearch() {
+  leadsIndustry = document.getElementById('leadIndustry').value;
+  leadsLocation = document.getElementById('leadLocation').value;
+  leadsSource = document.getElementById('leadSource').value;
+  if (!leadsIndustry) { toast('Please select an industry','error'); return; }
+  leadsSearching = true;
+  leadsSearchProgress = 0;
+  leadsData = [];
+  render();
+  const interval = setInterval(() => {
+    leadsSearchProgress += Math.floor(Math.random()*15)+5;
+    if (leadsSearchProgress >= 100) {
+      leadsSearchProgress = 100;
+      leadsSearching = false;
+      leadsData = generateFakeLeads(leadsIndustry, Math.floor(Math.random()*10)+8);
+      clearInterval(interval);
+      toast(`Found ${leadsData.length} qualified leads!`);
+    }
+    render();
+  }, 400);
+}
+
+function contactLead(id) {
+  const lead = leadsData.find(l=>l.id===id);
+  if (lead) { lead.status = 'contacted'; saveDB(db); toast('Outreach sent to '+lead.name); render(); }
+}
+
+function qualifyLead(id) {
+  const lead = leadsData.find(l=>l.id===id);
+  if (lead) { lead.status = 'qualified'; saveDB(db); toast(lead.name+' qualified as hot lead!'); render(); }
+}
+
+function autoOutreach() {
+  const newLeads = leadsData.filter(l=>l.status==='new');
+  if (!newLeads.length) { toast('No new leads to contact','error'); return; }
+  newLeads.forEach(l => l.status = 'contacted');
+  saveDB(db);
+  toast(`Auto-outreach sent to ${newLeads.length} leads!`);
+  render();
+}
+
+function exportLeads() {
+  const csv = 'Company,Score,Location,Phone,Email,Revenue,Employees,Source,Status\n'+
+    leadsData.map(l=>`"${l.name}",${l.score},"${l.city}","${l.phone}","${l.email}","${l.revenue}","${l.employees}","${l.source}",${l.status}`).join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='leads.csv'; a.click();
+  toast('Exported '+leadsData.length+' leads');
+}
+
+function importToCRM() {
+  const existing = db.entities.find(e=>e.wsId===wsId && e.name==='leads');
+  let entityId;
+  if (existing) {
+    entityId = existing.id;
+  } else {
+    const ent = {id:genId(), wsId, name:'leads',displayName:'Leads',icon:'🎯',color:'#4f46e5',
+      fields:[{name:'company',type:'text',label:'Company',required:true},{name:'score',type:'number',label:'Lead Score'},
+        {name:'location',type:'text',label:'Location'},{name:'phone',type:'phone',label:'Phone'},{name:'email',type:'email',label:'Email'},
+        {name:'revenue',type:'text',label:'Revenue'},{name:'employees',type:'text',label:'Employees'},{name:'source',type:'text',label:'Source'},
+        {name:'status',type:'select',label:'Status',options:[{label:'New',value:'new'},{label:'Contacted',value:'contacted'},{label:'Qualified',value:'qualified'},{label:'Converted',value:'converted'}]}],
+      createdAt:now()};
+    db.entities.push(ent);
+    entityId = ent.id;
+  }
+  leadsData.forEach(l => {
+    db.records.push({id:genId(), wsId, entityId, data:{company:l.name,score:l.score,location:l.city,phone:l.phone,email:l.email,revenue:l.revenue,employees:l.employees,source:l.source,status:l.status}, createdAt:now()});
+  });
+  saveDB(db);
+  toast(`Imported ${leadsData.length} leads to CRM!`);
+  navigate('crm');
+}
+  const mktFilter = window._mktFilter || '';
+  const items = db.marketplace.filter(i => i.status==='published' && (!mktFilter || i.type===mktFilter));
+  const cats = [{id:'',label:'All',icon:'🛒'},{id:'website_template',label:'Websites',icon:'🌐'},{id:'crm_template',label:'CRM',icon:'🗃️'},{id:'bot',label:'AI Bots',icon:'🤖'},{id:'agent',label:'AI Agents',icon:'👤'},{id:'automation',label:'Automations',icon:'⚡'},{id:'package',label:'Packages',icon:'📦'}];
+  const typeColors = {package:'linear-gradient(135deg,#6366f1,#8b5cf6)',crm_template:'linear-gradient(135deg,#3b82f6,#06b6d4)',bot:'linear-gradient(135deg,#ec4899,#f43f5e)',agent:'linear-gradient(135deg,#8b5cf6,#a855f7)',automation:'linear-gradient(135deg,#f59e0b,#ef4444)',website_template:'linear-gradient(135deg,#10b981,#059669)'};
+  return `
+    <div style="margin-bottom:24px"><h1 style="font-size:24px;font-weight:800">Marketplace</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Ready-made solutions for every business need</p></div>
+    <div style="display:flex;gap:8px;margin-bottom:24px;overflow-x:auto;padding-bottom:4px">
+      ${cats.map(c=>`<button onclick="window._mktFilter='${c.id}';render()" class="btn ${mktFilter===c.id?'btn-primary':'btn-secondary'} btn-sm" style="white-space:nowrap">${c.icon} ${c.label}</button>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+      ${items.map(i=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+        <div style="height:100px;background:${typeColors[i.type]||'linear-gradient(135deg,#6366f1,#8b5cf6)'};display:flex;align-items:center;justify-content:center"><span style="font-size:36px;opacity:.8">${i.type==='bot'?'🤖':i.type==='agent'?'👤':i.type==='automation'?'⚡':i.type==='crm_template'?'🗃️':i.type==='website_template'?'🌐':'📦'}</span></div>
+        <div style="padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+            <h3 style="font-weight:700;font-size:15px">${i.name}</h3>
+            <span class="badge badge-blue">${i.type.replace('_',' ')}</span>
+          </div>
+          <p style="font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.5">${i.desc||i.description||''}</p>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;gap:12px;font-size:12px;color:#94a3b8">
+              <span>⭐ ${i.rating}</span><span>📥 ${i.installs}</span>
+            </div>
+            <span style="font-weight:700;color:#4f46e5">${i.price}</span>
+          </div>
+        </div>
+      </div>`).join('')}
+    </div>`;
+}
+
+// ─── Packages ──────────────────────────────────────────────────────
+function renderPackages() {
+  const pkgs = db.packages.filter(p=>p.wsId===wsId);
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div><h1 style="font-size:24px;font-weight:800">Smart Packages</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Bundle solutions for reuse and sharing</p></div>
+      <button class="btn btn-primary" onclick="openModal('createPackage')">+ Create Package</button>
+    </div>
+    ${pkgs.length===0?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center">
+      <p style="font-size:48px;margin-bottom:16px">📦</p><h3 style="font-weight:700;margin-bottom:8px">No Packages Yet</h3>
+      <p style="color:#64748b;font-size:14px;margin-bottom:24px">Create reusable bundles of solutions.</p>
+      <button class="btn btn-primary" onclick="openModal('createPackage')">+ Create Package</button>
+    </div>`:`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+      ${pkgs.map(p=>`<div class="card-hover" style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+          <div style="width:40px;height:40px;border-radius:10px;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:20px">📦</div>
+          <span class="badge badge-${p.visibility==='private'?'gray':'blue'}">${p.visibility}</span>
+        </div>
+        <h3 style="font-weight:700;margin-bottom:4px">${p.name}</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:12px">${p.description||''}</p>
+        <div style="display:flex;gap:8px;font-size:12px;color:#94a3b8"><span>${(p.items||[]).length} items</span><span>v${p.version}</span></div>
+      </div>`).join('')}
+    </div>`}`;
+}
+
+function renderCreatePackageModal() {
+  return `<div style="padding:24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
+    <h3 style="font-weight:700">Create Smart Package</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8">✕</button></div>
+    <form onsubmit="submitCreatePackage(event)" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Package Name</label><input class="input" id="pName" placeholder="Dental Clinic Starter Pack" required></div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Description</label><textarea class="input textarea" id="pDesc" placeholder="What's included?"></textarea></div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Tags (comma-separated)</label><input class="input" id="pTags" placeholder="dental, clinic, healthcare"></div>
+      <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Visibility</label>
+        <select class="input" id="pVis"><option value="private">Private</option><option value="team">Team</option><option value="marketplace">Marketplace</option></select>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid #e2e8f0">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Package</button>
+      </div>
+    </form>`;
+}
+
+function submitCreatePackage(e) {
+  e.preventDefault();
+  const name = document.getElementById('pName').value;
+  db.packages.push({ id:genId(), wsId, name, description:document.getElementById('pDesc').value,
+    tags:document.getElementById('pTags').value.split(',').map(t=>t.trim()).filter(Boolean),
+    visibility:document.getElementById('pVis').value, items:[], version:'1.0.0', createdAt:now() });
+  saveDB(db); closeModal(); toast('Package "'+name+'" created');
+}
+
+// ─── Settings ──────────────────────────────────────────────────────
+let settingsTab = 'profile';
+function renderSettings() {
+  const tabs = [{id:'profile',label:'👤 Profile'},{id:'workspace',label:'🏢 Workspace'},{id:'team',label:'👥 Team'},{id:'security',label:'🔒 Security'},{id:'billing',label:'💳 Billing'}];
+  return `
+    <div style="margin-bottom:24px"><h1 style="font-size:24px;font-weight:800">Settings</h1><p style="font-size:14px;color:#64748b;margin-top:4px">Manage your account and workspace</p></div>
+    <div style="display:flex;gap:24px">
+      <div style="width:200px;flex-shrink:0">
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:8px">
+          ${tabs.map(t=>`<a onclick="settingsTab='${t.id}';render()" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px;${settingsTab===t.id?'background:#eef2ff;color:#4f46e5;font-weight:600':'color:#334155'}">${t.label}</a>`).join('')}
+        </div>
+      </div>
+      <div style="flex:1">
+        ${settingsTab==='profile'?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:24px">
+          <h2 style="font-size:18px;font-weight:700;margin-bottom:24px">Profile Settings</h2>
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px">
+            <div style="width:64px;height:64px;border-radius:50%;background:#e0e7ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800">${auth.user.name[0]}</div>
+            <div><p style="font-weight:700;font-size:18px">${auth.user.name}</p><p style="color:#64748b">${auth.user.email}</p></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px;max-width:420px">
+            <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Full Name</label><input class="input" value="${auth.user.name}"></div>
+            <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Email</label><input class="input" value="${auth.user.email}"></div>
+            <button class="btn btn-primary" onclick="toast('Profile updated')">Save Changes</button>
+          </div>
+        </div>`:''}
+        ${settingsTab==='workspace'?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:24px">
+          <h2 style="font-size:18px;font-weight:700;margin-bottom:24px">Workspace Settings</h2>
+          <div style="display:flex;flex-direction:column;gap:16px;max-width:420px">
+            <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Workspace Name</label><input class="input" value="${getWs()?.name||''}"></div>
+            <div><label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:6px">Slug</label><input class="input" value="${getWs()?.slug||''}"></div>
+            <button class="btn btn-primary" onclick="toast('Workspace updated')">Save Changes</button>
+          </div>
+        </div>`:''}
+        ${settingsTab==='team'?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:24px">
+          <h2 style="font-size:18px;font-weight:700;margin-bottom:24px">Team Members</h2>
+          ${db.members.filter(m=>m.wsId===wsId).map(m=>{const u=db.users.find(u=>u.id===m.userId);return u?`<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#f8fafc;border-radius:8px;margin-bottom:8px">
+            <div style="width:32px;height:32px;border-radius:50%;background:#e0e7ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${u.name[0]}</div>
+            <div style="flex:1"><p style="font-weight:600;font-size:14px">${u.name}</p><p style="font-size:12px;color:#64748b">${u.email}</p></div>
+            <span class="badge badge-blue">${m.role}</span>
+          </div>`:''}).join('')}
+        </div>`:''}
+        ${settingsTab==='security'?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:24px">
+          <h2 style="font-size:18px;font-weight:700;margin-bottom:24px">Security</h2>
+          <div style="margin-bottom:24px"><h3 style="font-weight:600;margin-bottom:12px">Change Password</h3>
+            <div style="display:flex;flex-direction:column;gap:12px;max-width:360px">
+              <input class="input" type="password" placeholder="Current password"><input class="input" type="password" placeholder="New password"><input class="input" type="password" placeholder="Confirm password">
+              <button class="btn btn-primary btn-sm" onclick="toast('Password updated')">Update Password</button>
+            </div>
+          </div>
+          <div style="padding-top:24px;border-top:1px solid #e2e8f0"><h3 style="font-weight:600;margin-bottom:8px">Two-Factor Authentication</h3><p style="font-size:13px;color:#64748b;margin-bottom:12px">Add extra security to your account.</p><button class="btn btn-secondary btn-sm">Enable 2FA</button></div>
+        </div>`:''}
+        ${settingsTab==='billing'?`<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:24px">
+          <h2 style="font-size:18px;font-weight:700;margin-bottom:24px">Billing & Subscription</h2>
+          <div style="padding:24px;background:#f8fafc;border-radius:12px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center">
+            <div><p style="font-size:12px;color:#64748b">Current Plan</p><p style="font-size:28px;font-weight:800">Free</p></div>
+            <button class="btn btn-primary">Upgrade Plan</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+            ${[{n:'Starter',p:'$29',f:['5 CRM entities','1 website','2 bots','1,000 records']},{n:'Professional',p:'$99',f:['Unlimited entities','5 websites','10 bots','100K records','AI agents']},{n:'Enterprise',p:'Custom',f:['Everything in Pro','SSO/SAML','Dedicated support','Isolated DB']}].map(plan=>`<div style="border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+              <h3 style="font-weight:700;margin-bottom:4px">${plan.n}</h3>
+              <p style="font-size:28px;font-weight:800;color:#4f46e5;margin-bottom:12px">${plan.p}<span style="font-size:13px;font-weight:400;color:#94a3b8">/mo</span></p>
+              <ul style="list-style:none;padding:0;margin:0">${plan.f.map(f=>`<li style="font-size:13px;color:#475569;padding:4px 0;display:flex;align-items:center;gap:8px"><span style="color:#4f46e5">•</span>${f}</li>`).join('')}</ul>
+              <button class="btn btn-secondary" style="width:100%;margin-top:16px">Select Plan</button>
+            </div>`).join('')}
+          </div>
+        </div>`:''}
+      </div>
+    </div>`;
+}
+
+// ─── Init ──────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
