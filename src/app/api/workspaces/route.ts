@@ -9,9 +9,9 @@ export async function GET(request: Request) {
     const workspaces = members.map((m: any) => {
       const ws = db.workspaces.findById(m.workspaceId);
       if (!ws) return null;
-      const entities = db.crmEntities.count({ workspaceId: ws.id });
-      const websites = db.websites.count({ workspaceId: ws.id });
-      const automations = db.automations.count({ workspaceId: ws.id });
+      const entities = db.crmEntities.findMany({ workspaceId: ws.id }).length;
+      const websites = db.websites.findMany({ workspaceId: ws.id }).length;
+      const automations = db.automations.findMany({ workspaceId: ws.id }).length;
       return { id: ws.id, name: ws.name, slug: ws.slug, role: m.role, stats: { entities, websites, automations } };
     }).filter(Boolean);
     return apiSuccess(workspaces);

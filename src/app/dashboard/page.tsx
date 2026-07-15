@@ -18,15 +18,7 @@ interface Stats {
   agents: number;
 }
 
-export default function DashboardPageWrapper() {
-  return (
-    <AppShell>
-      <DashboardPage />
-    </AppShell>
-  );
-}
-
-export function DashboardPage() {
+export default function DashboardPage() {
   const { currentWorkspace } = useAuth();
   const { addNotification } = useUI();
   const [stats, setStats] = useState<Stats | null>(null);
