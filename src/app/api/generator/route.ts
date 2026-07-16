@@ -217,29 +217,31 @@ export async function PUT(request: Request) {
     const results: any = { modules: [] };
 
     for (const e of preview.crm.entities) {
-      const ent = prisma.crmEntity.create({ workspaceId, name: e.name, displayName: e.displayName, icon: e.icon, color: e.color, fields: e.fields });
+      const ent = await prisma.crmEntity.create({ data: { workspaceId, name: e.name, displayName: e.displayName, icon: e.icon || "database", color: e.color || "#6366f1", fields: e.fields || [], settings: {} } });
       results.modules.push({ type: "crm_entity", id: ent.id, name: ent.displayName });
     }
     for (const b of preview.bots) {
-      const bot = prisma.aiBot.create({ workspaceId, name: b.name, type: b.type, description: b.description, channels: b.channels });
+      const bot = await prisma.aiBot.create({ data: { workspaceId, name: b.name, type: b.type || "custom", description: b.description, channels: b.channels || [], personality: {}, flows: [], config: {} } });
       results.modules.push({ type: "bot", id: bot.id, name: bot.name });
     }
     for (const a of preview.agents) {
-      const agent = prisma.aiAgent.create({ workspaceId, name: a.name, role: a.role, description: a.description, tools: a.tools });
+      const agent = await prisma.aiAgent.create({ data: { workspaceId, name: a.name, role: a.role, description: a.description, tools: a.tools || [], personality: {}, capabilities: [], memory: {}, config: {} } });
       results.modules.push({ type: "agent", id: agent.id, name: agent.name });
     }
     for (const a of preview.automations) {
-      const auto = prisma.automation.create({ workspaceId, name: a.name, description: a.description, trigger: a.trigger, nodes: [], connections: [] });
+      const auto = await prisma.automation.create({ data: { workspaceId, name: a.name, description: a.description, trigger: a.trigger || {}, nodes: [], connections: [] } });
       results.modules.push({ type: "automation", id: auto.id, name: auto.name });
     }
-    const website = prisma.website.create({
-      workspaceId, name: preview.name, slug: preview.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      templateId: preview.website?.template, config: preview.website || {},
-      pages: (preview.website?.pages || []).map((p: string, i: number) => ({
-        id: p.toLowerCase().replace(/\s+/g, "-"), name: p, slug: i === 0 ? "/" : "/" + p.toLowerCase().replace(/\s+/g, "-"), isHome: i === 0,
-        sections: i === 0 ? [{ id: "hero", type: "hero", props: { title: preview.name, subtitle: "Welcome" } }] : [{ id: "content", type: "content", props: { title: p } }],
-      })),
-      styles: {}, seo: {},
+    const website = await prisma.website.create({
+      data: {
+        workspaceId, name: preview.name, slug: preview.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        templateId: preview.website?.template, config: preview.website || {},
+        pages: (preview.website?.pages || []).map((p: string, i: number) => ({
+          id: p.toLowerCase().replace(/\s+/g, "-"), name: p, slug: i === 0 ? "/" : "/" + p.toLowerCase().replace(/\s+/g, "-"), isHome: i === 0,
+          sections: i === 0 ? [{ id: "hero", type: "hero", props: { title: preview.name, subtitle: "Welcome" } }] : [{ id: "content", type: "content", props: { title: p } }],
+        })),
+        styles: {}, seo: {},
+      },
     });
     results.modules.push({ type: "website", id: website.id, name: website.name });
 

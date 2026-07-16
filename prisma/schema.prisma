@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -12,7 +12,7 @@ model Organization {
   name      String
   slug      String   @unique
   logo      String?
-  settings  Json     @default("{}")
+  settings  String     @default("{}")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -27,7 +27,7 @@ model Workspace {
   organizationId String   @map("organization_id")
   name           String
   slug           String
-  settings       Json     @default("{}")
+  settings       String     @default("{}")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -68,7 +68,7 @@ model Member {
   workspaceId String   @map("workspace_id")
   userId      String   @map("user_id")
   role        String   @default("member")
-  permissions Json     @default("[]")
+  permissions String     @default("[]")
   joinedAt    DateTime @default(now()) @map("joined_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -99,8 +99,8 @@ model CrmEntity {
   displayName String   @map("display_name")
   icon        String   @default("database")
   color       String   @default("#6366f1")
-  fields      Json     @default("[]")
-  settings    Json     @default("{}")
+  fields      String     @default("[]")
+  settings    String     @default("{}")
   isSystem    Boolean  @default(false) @map("is_system")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -116,7 +116,7 @@ model CrmRecord {
   id          String    @id @default(cuid())
   workspaceId String    @map("workspace_id")
   entityId    String    @map("entity_id")
-  data        Json      @default("{}")
+  data        String      @default("{}")
   createdBy   String?   @map("created_by")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
@@ -137,10 +137,10 @@ model Website {
   templateId  String?  @map("template_id")
   domain      String?
   published   Boolean  @default(false)
-  config      Json     @default("{}")
-  pages       Json     @default("[]")
-  styles      Json     @default("{}")
-  seo         Json     @default("{}")
+  config      String     @default("{}")
+  pages       String     @default("[]")
+  styles      String     @default("{}")
+  seo         String     @default("{}")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -154,9 +154,9 @@ model Automation {
   workspaceId String    @map("workspace_id")
   name        String
   description String?
-  trigger     Json      @default("{}")
-  nodes       Json      @default("[]")
-  connections Json      @default("[]")
+  trigger     String      @default("{}")
+  nodes       String      @default("[]")
+  connections String      @default("[]")
   active      Boolean   @default(false)
   executions  Int       @default(0)
   lastRunAt   DateTime? @map("last_run_at")
@@ -174,10 +174,10 @@ model AiBot {
   name        String
   type        String   @default("custom")
   description String?
-  personality Json     @default("{}")
-  channels    Json     @default("[]")
-  flows       Json     @default("[]")
-  config      Json     @default("{}")
+  personality String     @default("{}")
+  channels    String     @default("[]")
+  flows       String     @default("[]")
+  config      String     @default("{}")
   active      Boolean  @default(false)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -194,11 +194,11 @@ model AiAgent {
   role         String
   description  String?
   systemPrompt String?  @map("system_prompt")
-  personality  Json     @default("{}")
-  tools        Json     @default("[]")
-  capabilities Json     @default("[]")
-  memory       Json     @default("{}")
-  config       Json     @default("{}")
+  personality  String     @default("{}")
+  tools        String     @default("[]")
+  capabilities String     @default("[]")
+  memory       String     @default("{}")
+  config       String     @default("{}")
   active       Boolean  @default(false)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -217,14 +217,14 @@ model MarketplaceItem {
   description     String?
   longDescription String?   @map("long_description")
   thumbnail       String?
-  screenshots     Json      @default("[]")
+  screenshots     String      @default("[]")
   category        String?
-  tags            Json      @default("[]")
+  tags            String      @default("[]")
   priceModel      String    @default("free") @map("price_model")
   priceAmount     Float?    @map("price_amount")
   currency        String    @default("USD")
   version         String    @default("1.0.0")
-  blueprint       Json      @default("{}")
+  blueprint       String      @default("{}")
   ratingAvg       Float     @default(0) @map("rating_avg")
   ratingCount     Int       @default(0) @map("rating_count")
   installCount    Int       @default(0) @map("install_count")
@@ -257,10 +257,10 @@ model SmartPackage {
   workspaceId String   @map("workspace_id")
   name        String
   description String?
-  items       Json     @default("[]")
+  items       String     @default("[]")
   totalPrice  Float    @default(0) @map("total_price")
   visibility  String   @default("private")
-  tags        Json     @default("[]")
+  tags        String     @default("[]")
   version     String   @default("1.0.0")
   usageCount  Int      @default(0) @map("usage_count")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -278,8 +278,8 @@ model AuditLog {
   action       String
   resourceType String   @map("resource_type")
   resourceId   String?  @map("resource_id")
-  changes      Json     @default("{}")
-  metadata     Json     @default("{}")
+  changes      String     @default("{}")
+  metadata     String     @default("{}")
   createdAt    DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id])

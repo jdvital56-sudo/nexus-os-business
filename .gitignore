@@ -1,5 +1,8 @@
 # Nexus OS Business
 node_modules/
+.next/
 .data/
 .env
 *.db
+*.db-journal
+
